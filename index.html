@@ -118,7 +118,9 @@
   </section>
 </div>
 
-<button class="fab" id="dict-btn-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg> Надиктовать</button>
+<button class="voice-tab" id="dict-btn-plan" aria-label="Надиктовать дела" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button>
+<div class="voice-ov" id="voice-ov" hidden aria-live="polite"><div class="voice-hint" id="voice-hint">Говорите. Нажмите ещё раз, чтобы закончить</div><div class="voice-text" id="voice-text"></div></div>
+<div class="toast" id="toast" hidden role="status"><span id="toast-text"></span><button type="button" id="toast-undo">Отменить</button></div>
 
 <nav class="tabs" role="tablist">
   <div class="in">

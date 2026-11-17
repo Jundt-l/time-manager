@@ -109,9 +109,24 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .check[aria-pressed="true"] svg{opacity:1}
 .tl-row.now .check{width:44px;height:44px;border-radius:14px}
 
-/* плавающая кнопка «Надиктовать» */
-.fab{position:fixed;z-index:11;right:max(20px,env(safe-area-inset-right,0px));bottom:calc(96px + env(safe-area-inset-bottom,0px));height:56px;padding:0 22px 0 18px;border-radius:28px;border:none;background:var(--accent);color:var(--on-accent);font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;box-shadow:0 10px 24px rgb(56 70 196 / .35)}
-.fab svg{width:20px;height:20px}
+/* кнопка диктовки: полукруг у правого края */
+.voice-tab{position:fixed;z-index:12;right:0;bottom:calc(150px + env(safe-area-inset-bottom,0px));width:46px;height:72px;min-height:72px;padding:0 0 0 6px;border:none;border-radius:36px 0 0 36px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;box-shadow:-4px 6px 18px rgb(56 70 196 / .3)}
+.voice-tab svg{width:22px;height:22px}
+.voice-tab[aria-pressed="true"]{background:var(--danger);width:58px;box-shadow:-4px 6px 18px rgb(192 53 43 / .35)}
+@media (prefers-reduced-motion:no-preference){.voice-tab{transition:width .18s, background .18s}.voice-tab[aria-pressed="true"] svg{animation:vpulse 1s ease-in-out infinite}}
+@keyframes vpulse{50%{transform:scale(1.18)}}
+.voice-tab.beat svg{transform:scale(1.25)}
+/* текст речи: полупрозрачный, нижняя треть экрана */
+.voice-ov{position:fixed;z-index:11;left:0;right:0;bottom:0;height:40vh;pointer-events:none;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;
+  padding:24px 76px calc(90px + env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px));
+  background:linear-gradient(to bottom, rgb(246 247 251 / 0), rgb(246 247 251 / .96) 22%)}
+.voice-hint{font-size:13px;font-weight:600;color:var(--danger)}
+.voice-text{font-size:22px;line-height:1.3;font-weight:600;color:rgb(20 26 46 / .62);max-height:100%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.voice-text:empty::before{content:"…";color:var(--faint)}
+.toast{position:fixed;z-index:13;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(90px + env(safe-area-inset-bottom,0px));max-width:520px;margin:0 auto;
+  background:var(--ink);color:#FFFFFF;border-radius:16px;padding:10px 10px 10px 16px;display:flex;align-items:center;gap:10px;font-size:14px;box-shadow:var(--shadow)}
+.toast span{flex:1;min-width:0}
+.toast button{background:transparent;border:none;color:#AFB7FF;min-height:40px;padding:0 10px}
 
 /* барабан времени */
 .drum{-webkit-user-select:none;user-select:none}

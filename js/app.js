@@ -381,7 +381,67 @@ $('dict-text').addEventListener('input', () => { clearTimeout(parseTimer); parse
 $('dict-preview').addEventListener('click', e => { const b = e.target.closest('[data-drop]'); if (b) { draft.splice(+b.dataset.drop, 1); renderDraft(); } });
 $('dict-add').onclick = () => { state.tasks.push(...draft); draft = []; stopMic(); $('dict-sheet').hidden = true; render(); };
 $('dict-close').onclick = () => { stopMic(); $('dict-sheet').hidden = true; };
-$('dict-btn-plan').onclick = openDictation;
+
+// ---------- быстрая диктовка: нажал — говоришь, нажал ещё раз — дела добавлены ----------
+const buzz = p => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) { /* нет вибрации */ } };
+let vRec = null, vOn = false, vFinal = '', vShown = 0, vDoneTimer = null;
+function voiceStart() {
+  if (!Speech) { openDictation(); return; } // нет распознавания речи — окно с вводом текста
+  vOn = true; vFinal = ''; vShown = 0;
+  $('voice-text').textContent = ''; $('voice-ov').hidden = false;
+  $('dict-btn-plan').setAttribute('aria-pressed', 'true'); $('dict-btn-plan').setAttribute('aria-label', 'Закончить диктовку');
+  buzz(20);
+  listen();
+}
+function listen() {
+  const base = vFinal;
+  vRec = new Speech(); vRec.lang = 'ru-RU'; vRec.interimResults = true; vRec.continuous = true;
+  vRec.onresult = e => {
+    let fin = '', interim = '';
+    for (const r of e.results) { if (r.isFinal) fin += r[0].transcript + ' '; else interim += r[0].transcript; }
+    vFinal = base + fin;
+    const shown = (vFinal + interim).replace(/\s+/g, ' ').trim();
+    $('voice-text').textContent = shown;
+    // вибрация вслед за голосом: чем больше новых слов, тем сильнее
+    const grow = shown.length - vShown;
+    if (grow > 0) { buzz(Math.min(35, 8 + grow * 2)); $('dict-btn-plan').classList.add('beat'); setTimeout(() => $('dict-btn-plan').classList.remove('beat'), 120); }
+    vShown = shown.length;
+  };
+  vRec.onerror = e => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture') { vOn = false; voiceFinish(); toast('Нет доступа к микрофону. Разрешите его приложению в настройках телефона.'); }
+  };
+  // телефон сам останавливает запись после паузы: пока не нажали «стоп», слушаем дальше
+  vRec.onend = () => { if (vOn) { try { listen(); } catch (err) { vOn = false; voiceFinish(); } } else voiceFinish(); };
+  try { vRec.start(); } catch (e) { /* уже слушает */ }
+}
+function voiceStop() {
+  vOn = false; buzz([12, 50, 12]);
+  try { vRec.stop(); } catch (e) { /* уже остановлен */ }
+  clearTimeout(vDoneTimer); vDoneTimer = setTimeout(voiceFinish, 1500); // если телефон не сообщил об остановке
+}
+function voiceFinish() {
+  clearTimeout(vDoneTimer);
+  if ($('voice-ov').hidden) return;
+  $('voice-ov').hidden = true;
+  $('dict-btn-plan').setAttribute('aria-pressed', 'false'); $('dict-btn-plan').setAttribute('aria-label', 'Надиктовать дела');
+  const text = $('voice-text').textContent.trim();
+  if (!text) return;
+  const added = parseDictation(text, todayISO(), state.tasks, newId);
+  if (!added.length) { toast('Не понял ни одного дела. Попробуйте: «купить продукты в 18:00».'); return; }
+  state.tasks.push(...added); render();
+  const ids = new Set(added.map(t => t.id));
+  toast('Добавлено: ' + added.map(t => t.name).join(', '), () => { state.tasks = state.tasks.filter(t => !ids.has(t.id)); render(); });
+}
+$('dict-btn-plan').onclick = () => { if (vOn) voiceStop(); else voiceStart(); };
+
+let toastTimer = null, toastUndo = null;
+function toast(text, undo) {
+  $('toast-text').textContent = text;
+  toastUndo = undo || null; $('toast-undo').hidden = !undo;
+  $('toast').hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, undo ? 7000 : 4000);
+}
+$('toast-undo').onclick = () => { if (toastUndo) toastUndo(); toastUndo = null; $('toast').hidden = true; };
 
 // ---------- запуск ----------
 notify.init(applyAction);

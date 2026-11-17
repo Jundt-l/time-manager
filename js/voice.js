@@ -42,9 +42,41 @@ function words2num(s) {
   return s.replace(/(?<![0-9])([2-5]0) ([1-9])(?![0-9])/g, (_, a, b) => String(+a + +b));
 }
 
+// Команды приложению, а не часть дела: «поставь», «добавь», «напомни мне»…
+const COMMANDS = rx('(?:поставь|поставьте|добавь|добавьте|запиши|запишите|напомни|напомните|создай|внеси|сделай задачу|задача|задачу)(?: мне| нам)?(?: задачу)?', 'g');
+// Слова на -ть, которые не глаголы
+const NOT_VERB = /^(?:часть|сеть|путь|мать|рать|тетрадь|кровать|печать|скатерть|смерть|знать|\S*ость)$/;
+// Частые повелительные формы: «накорми кота свари гречку»
+const IMPERATIVE = /^(?:купи|свари|сходи|позвони|забери|приготовь|помой|убери|накорми|выгуляй|встреть|напиши|отправь|оплати|полей|вынеси|постирай|погуляй|сделай|сготовь|пожарь|почисти|запусти|развесь|сложи|погладь)$/;
+// После этих слов глагол продолжает то же дело: «надо купить», «пойти погулять», «не забыть позвонить»
+const MODAL = /^(?:надо|нужно|хочу|буду|можно|пойти|сходить|поехать|не|забыть|попробовать|начать|успеть|бы)$/;
+const isVerb = w => (/(?:ть|ться|тись)$/.test(w) && !NOT_VERB.test(w)) || IMPERATIVE.test(w);
+
+/** Распознанная речь без знаков препинания: «сварить гречку накормить кота» → два дела по глаголам. */
+function splitByVerbs(chunk) {
+  const words = chunk.trim().split(/\s+/), out = [];
+  let cur = [], hasVerb = false;
+  words.forEach(w => {
+    const verb = isVerb(w);
+    if (verb && hasVerb && cur.length >= 2 && !MODAL.test(cur[cur.length - 1])) { out.push(cur.join(' ')); cur = []; hasVerb = false; }
+    cur.push(w);
+    if (verb) hasVerb = true;
+  });
+  if (cur.length) out.push(cur.join(' '));
+  return out;
+}
+
+/** Убрать команды приложению и повторы, которые бывают при диктовке («поставь на поставь на 16:30»). */
+export function cleanSpeech(text) {
+  let s = ' ' + text.toLowerCase().replace(/ё/g, 'е') + ' ';
+  s = s.replace(COMMANDS, ' ').replace(/\s+/g, ' ');
+  for (let i = 0; i < 3; i++) s = s.replace(/(^|\s)((?:[а-яa-z0-9:.-]+ ){1,3})\2/g, '$1$2');
+  return s.trim();
+}
+
 /** Делит текст на отдельные дела. */
 export function splitPhrases(text) {
-  const first = text.toLowerCase().replace(/ё/g, 'е')
+  const first = cleanSpeech(text)
     .split(/[.;!?\n]+|,(?! ?\d)|\s(?:потом|затем|а также|а еще|и еще|еще)\s/);
   const out = [];
   first.forEach(chunk => {
@@ -58,7 +90,7 @@ export function splitPhrases(text) {
     }
     out.push(cur);
   });
-  return out.map(s => s.trim()).filter(s => s.replace(/(?:^|\s)(?:потом|затем|и|а|еще|также)(?=\s|$)/g, '').replace(/[^а-яa-z]/g, '').length > 1);
+  return out.flatMap(splitByVerbs).map(s => s.trim()).filter(s => s.replace(/(?:^|\s)(?:потом|затем|и|а|еще|также)(?=\s|$)/g, '').replace(/[^а-яa-z]/g, '').length > 1);
 }
 
 /**
@@ -127,6 +159,13 @@ export function parsePhrase(phrase, todayISO, existing = []) {
 
   // точное время
   take(rx('в полдень'), () => { t.fixed = '12:00'; }) ||
+  // «на 16:30», «на 7 вечера» — это время, а не длительность
+  take(rx('на (\\d{1,2})(?:[:.](\\d{2})|(?: (\\d{1,2}))? (утра|дня|вечера|ночи))'), m => {
+    let h = +m[1]; const min = +(m[2] || m[3] || 0);
+    if ((m[4] === 'вечера' && h < 12) || (m[4] === 'дня' && h < 8)) h += 12;
+    if (h > 23 || min > 59) return;
+    t.fixed = String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+  }) ||
   take(rx('(?:в|к) (\\d{1,2})(?:[:.](\\d{2})| ?час(?:а|ов)?(?: (\\d{1,2}) ?минут\\w*)?)?(?: (утра|дня|вечера|ночи))?'), m => {
     let h = +m[1]; const min = +(m[2] || m[3] || 0);
     if ((m[4] === 'вечера' && h < 12) || (m[4] === 'дня' && h < 8)) h += 12;
