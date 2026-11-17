@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Мой день</title>
+<meta name="description" content="Органайзер, который сам раскладывает дела по дню и освобождает время для себя.">
+<meta name="theme-color" content="#3846C4">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Мой день">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;600&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+        <div class="row daynav"><button id="prev-day" aria-label="Предыдущий день">‹</button><h1 id="today-title">Мой день</h1><button id="next-day" aria-label="Следующий день">›</button></div>
+    <div class="row"><span id="daytype" class="chip">Будний день</span><button class="ghost" id="to-today" hidden>Вернуться к сегодня</button></div>
+  </header>
+
+  <!-- PLAN -->
+  <section id="view-plan" class="wrap" style="gap:14px">
+    <div class="notif" id="notify-card" hidden>
+      <div class="q">Включите напоминания</div>
+      <div class="note">Если время дела прошло, а галочки нет, приложение спросит: «Вы сделали?»</div>
+      <div class="note" id="notify-ios" hidden>На iPhone сначала добавьте приложение на экран «Домой»: кнопка «Поделиться» в Safari, затем «На экран Домой». Потом откройте его оттуда.</div>
+      <div class="note" id="notify-denied" hidden>Уведомления сейчас запрещены. Разрешите их для этого сайта в настройках браузера или телефона.</div>
+      <button class="primary" id="notify-btn">Включить</button>
+    </div>
+    <div id="checks" style="display:flex;flex-direction:column;gap:8px"></div>
+    <div class="stats">
+      <div class="stat free"><b id="st-free">—</b><span>свободно для себя</span></div>
+      <div class="stat"><b id="st-count">—</b><span>дел на сегодня</span></div>
+      <div class="stat"><b id="st-par">—</b><span>идут параллельно</span></div>
+    </div>
+    <div class="row">
+      <label style="flex:1"><span>Подъём <span class="dt-label">в будни</span></span><input id="wake" type="time" value="07:00"></label>
+      <label style="flex:1"><span>Отбой <span class="dt-label">в будни</span></span><input id="sleep" type="time" value="23:00"></label>
+    </div>
+    <div id="unplaced" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div class="tl" id="timeline"></div>
+  </section>
+
+  <!-- TASKS -->
+  <section id="view-tasks" class="wrap" hidden style="gap:18px">
+    <div class="row" style="justify-content:space-between">
+      <h2>Мои задачи</h2>
+      <button class="primary" id="add-btn">Добавить</button>
+    </div>
+    <div class="group"><div class="eyebrow">Повседневные · каждый день</div><div id="list-daily" class="group"></div></div>
+    <div class="group"><div class="eyebrow">Вариативные · раз в несколько дней</div><div id="list-var" class="group"></div></div>
+    <button class="ghost" id="reset-btn">Начать заново с примерных задач</button>
+  </section>
+
+  <!-- IDEA -->
+  <section id="view-idea" class="wrap" hidden style="gap:12px">
+    <h2>Как приложение строит день</h2>
+    <div class="card">
+      <div class="eyebrow">Два вида задач</div>
+      <p><b>Повседневные</b> бывают каждый день: работа, душ, тренировка. У некоторых есть точное время (работа с 9 до 18), другие просто привязаны к утру, дню или вечеру.</p>
+      <p><b>Вариативные</b> нужны раз в несколько дней: стирка, уборка, покупки. Приложение помнит, когда вы делали их в последний раз, и ставит в план, только когда подошёл срок.</p>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Что учитывается</div>
+      <ul>
+        <li><b>Длительность</b> и <b>важность</b> задачи.</li>
+        <li><b>Когда удобнее</b>: утром, днём, вечером или когда угодно.</li>
+        <li><b>Будни или выходные.</b> Приложение само знает, какой сегодня день, и берёт нужное расписание: работа только в будни, на выходных свой подъём и отбой.</li>
+        <li><b>Работа фоном.</b> Стирка: 10 минут загрузить, 60 минут машина стирает сама, 10 минут развесить. Пока она стирает, вы свободны для других дел.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Порядок построения</div>
+      <ul>
+        <li>Сначала ставятся дела с точным временем и цепочки «сразу после»: сдвинете выход из дома, и работа с дорогой домой сдвинутся вместе с ним.</li>
+        <li>Потом задачи по важности. Из равных первыми идут те, что работают фоном, чтобы запустить их пораньше и делать остальное параллельно.</li>
+        <li>Фоновую задачу приложение запускает так, чтобы вы успели её закончить, а не оставили бельё в машине до вечера.</li>
+        <li>Всё, что осталось, это свободное время для себя. Оно показано зелёным.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Напоминания</div>
+      <p>Если время задачи прошло, а галочки нет, приходит уведомление с двумя кнопками: «Сделано» и «Не сделал». Отвечать можно прямо из уведомления. Пропущенная вариативная задача остаётся в плане на следующий день. На iPhone в уведомлении нет кнопок: нажмите на него, и приложение откроется с карточкой «Вы сделали?».</p>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Что дальше</div>
+      <p>Сейчас задачи хранятся только на этом телефоне. Следующим шагом появятся вход для двоих, общие домашние дела и синхронизация между Android и iPhone.</p>
+    </div>
+  </section>
+</div>
+
+<nav class="tabs" role="tablist">
+  <div class="in">
+    <button role="tab" id="tab-plan" aria-selected="true">План дня</button>
+    <button role="tab" id="tab-tasks" aria-selected="false">Задачи</button>
+    <button role="tab" id="tab-idea" aria-selected="false">Как это работает</button>
+  </div>
+</nav>
+
+<div class="sheet" id="sheet" hidden>
+  <form class="panel" id="form">
+    <div class="row" style="justify-content:space-between"><h2 id="form-title">Новая задача</h2><button type="button" class="ghost" id="close-btn">Закрыть</button></div>
+    <label>Название<input id="f-name" required placeholder="Например, полить цветы"></label>
+    <div class="seg" role="group" aria-label="Вид задачи">
+      <button type="button" id="f-kind-daily" aria-pressed="true">Повседневная</button>
+      <button type="button" id="f-kind-var" aria-pressed="false">Вариативная</button>
+    </div>
+    <div class="grid2">
+      <label>Сколько минут<input id="f-dur" type="number" min="5" step="5" value="30"></label>
+      <label>Важность<select id="f-prio"><option value="3">Высокая</option><option value="2" selected>Средняя</option><option value="1">Низкая</option></select></label>
+    </div>
+    <div class="grid2">
+      <label>Когда удобнее<select id="f-when"><option value="any">Когда угодно</option><option value="morning">Утром</option><option value="day">Днём</option><option value="evening">Вечером</option></select></label>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted)">Точное время<button type="button" id="f-fixed-btn" class="timebtn">Не задано</button><input id="f-fixed" type="hidden"></div>
+    </div>
+    <div id="wheel-box" hidden style="display:flex;flex-direction:column;gap:8px">
+      <div class="wheel"><div class="band"></div><div class="drum" id="drum-h" aria-label="Часы"></div><div class="colon">:</div><div class="drum" id="drum-m" aria-label="Минуты"></div></div>
+      <div class="row" style="justify-content:space-between"><button type="button" class="ghost" id="wheel-clear">Без точного времени</button><button type="button" id="wheel-ok">Готово</button></div>
+    </div>
+    <label>Какие дни<select id="f-days"><option value="all">Все дни</option><option value="weekday">Только будни</option><option value="weekend">Только выходные</option></select></label>
+    <label>Или начать сразу после<select id="f-after"><option value="">Не привязана</option></select></label>
+    <fieldset id="f-var-box" hidden>
+      <legend>Как часто</legend>
+      <div class="grid2">
+        <label>Раз в (дней)<input id="f-every" type="number" min="1" value="7"></label>
+        <label>Последний раз (дней назад)<input id="f-ago" type="number" min="0" value="0"></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Если задача идёт фоном (стирка, посудомойка)</legend>
+      <div class="grid2">
+        <label>Работает сама, мин<input id="f-bg" type="number" min="0" step="5" value="0"></label>
+        <label>Закончить после, мин<input id="f-fin" type="number" min="0" step="5" value="0"></label>
+      </div>
+    </fieldset>
+    <div class="row" style="justify-content:space-between">
+      <button type="button" class="ghost" id="del-btn" style="color:var(--danger)" hidden>Удалить</button>
+      <button type="submit" class="primary" style="margin-left:auto">Сохранить</button>
+    </div>
+  </form>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
