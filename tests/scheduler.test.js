@@ -149,3 +149,15 @@ test('удалили дело — освободившееся окно сраз
   assert.equal(p.unplaced.length, 0);
   assert.equal(p.items.find(i => i.task && i.task.id === 'new').s, 16 * 60 + 40);
 });
+
+test('убрали на сегодня начало цепочки — следующие дела остаются на своём времени', async () => {
+  const { buildDay } = await import('../js/scheduler.js');
+  const st = { tasks: [
+    { id: 'r', name: 'Дорога', kind: 'daily', days: 'all', fixed: '08:30', dur: 30, prio: 3, when: 'any', bg: 0, fin: 0 },
+    { id: 'w', name: 'Работа', kind: 'daily', days: 'all', fixed: '', after: 'r', dur: 540, prio: 3, when: 'any', bg: 0, fin: 0 }],
+    times: { weekday: { wake: '07:00', sleep: '23:00' }, weekend: { wake: '07:00', sleep: '23:00' } }, done: { ids: {} }, hide: { r: true } };
+  const p = buildDay(st, '2026-11-17', '2026-11-17', 20 * 60);
+  assert.equal(p.items.find(i => i.task && i.task.id === 'w').s, 9 * 60);
+  assert.ok(!p.items.find(i => i.task && i.task.id === 'r'));
+  assert.equal(p.unplaced.length, 0);
+});

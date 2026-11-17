@@ -80,10 +80,16 @@
     <button class="ghost" id="reset-btn">Начать заново с примерных задач</button>
   </section>
 
+  <!-- ИТОГИ -->
+  <section id="view-day" class="wrap" hidden style="gap:12px">
+    <h2>Итоги дня</h2>
+    <div id="day-sum" class="group"></div>
+    <div id="stats"></div>
+  </section>
+
   <!-- IDEA -->
   <section id="view-idea" class="wrap" hidden style="gap:12px">
     <h2>Профиль</h2>
-    <div id="stats"></div>
     <div id="account" class="group"></div>
     <h2 style="margin-top:14px">Как приложение строит день</h2>
     <div class="card">
@@ -128,6 +134,7 @@
   <div class="in">
     <button role="tab" id="tab-plan" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>План</button>
     <button role="tab" id="tab-tasks" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"></path></svg>Задачи</button>
+    <button role="tab" id="tab-day" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"></path></svg>Итоги</button>
     <button role="tab" id="tab-idea" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"></path></svg>Профиль</button>
   </div>
 </nav>

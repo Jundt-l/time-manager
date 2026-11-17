@@ -65,7 +65,8 @@ export function buildDay(state, dayISO, todayISO, nowMin = null) {
   const dayType = typeOfDay(state, dayISO);
   // «убрать на сегодня» действует только на сегодняшний план
   const hidden = (dayISO === todayISO && state.hide) || {};
-  const due = t => !hidden[t.id] && isDue(t, dayISO, todayISO, doneToday, dayType);
+  const dueRaw = t => isDue(t, dayISO, todayISO, doneToday, dayType);
+  const due = t => !hidden[t.id] && dueRaw(t);
   const tm = state.times[dayType];
   const wake = toMin(tm.wake), sleep = toMin(tm.sleep);
   const busy = [], items = [], unplaced = [], moved = [];
@@ -77,7 +78,8 @@ export function buildDay(state, dayISO, todayISO, nowMin = null) {
     if (depth > 20) return null;
     if (t.after) {
       const p = tasks.find(x => x.id === t.after);
-      if (p && due(p)) { const ps = startOf(p, depth + 1); return ps === null ? null : ps + p.dur; }
+      // убранное на сегодня дело всё равно держит время для цепочки: работа не сдвигается без дороги
+      if (p && dueRaw(p)) { const ps = startOf(p, depth + 1); return ps === null ? null : ps + p.dur; }
     }
     return t.fixed ? toMin(t.fixed) : null;
   };

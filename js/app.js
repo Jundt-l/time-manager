@@ -167,7 +167,7 @@ function renderNotifyCard() {
   $('notify-btn').hidden = st === 'denied' || notify.needsInstallOnIOS();
 }
 
-function render() { rollDay(); renderPlan(); renderTasks(); renderNotifyCard(); renderStats(); save(); }
+function render() { rollDay(); renderPlan(); renderTasks(); renderNotifyCard(); renderDaySum(); renderStats(); save(); }
 
 // ---------- отметки ----------
 /** Отметить дело и запомнить, кто отметил (для общих дел и статистики). */
@@ -217,10 +217,10 @@ $('to-today').onclick = () => { offset = 0; render(); };
 $('notify-btn').onclick = async () => { await notify.requestPermission(); render(); await account.enablePush(); };
 
 // ---------- вкладки ----------
-const tabs = { plan: 'view-plan', tasks: 'view-tasks', idea: 'view-idea' };
+const tabs = { plan: 'view-plan', tasks: 'view-tasks', day: 'view-day', idea: 'view-idea' };
 function show(name) {
   Object.entries(tabs).forEach(([k, v]) => { $(v).hidden = k !== name; $('tab-' + k).setAttribute('aria-selected', k === name); });
-  $('dict-btn-plan').hidden = name === 'idea';
+  $('dict-btn-plan').hidden = name === 'idea' || name === 'day';
   if (name === 'idea') account.renderProfile();
   window.scrollTo(0, 0);
 }
@@ -377,6 +377,47 @@ $('del-btn').onclick = () => {
   deleteTask(editing);
   $('sheet').hidden = true; render();
 };
+
+// ---------- итоги дня ----------
+/** Перенести дело на завтра: разовое — сдвинуть дату, остальное — убрать из сегодняшнего плана. */
+function toTomorrow(t) { if (t.kind === 'once') t.date = addDays(t.date, 1); else state.hide[t.id] = true; }
+function renderDaySum() {
+  const box = $('day-sum'); if (!box) return;
+  const today = todayISO(), now = nowMin();
+  const { items, unplaced } = buildDay(account.planState(state), today, today, now);
+  const me = account.myId();
+  const list = items.filter(askable).filter(i => !(state.by[keyOf(i)] && state.by[keyOf(i)] !== me && state.done.ids[keyOf(i)] !== undefined));
+  const isDone = i => state.done.ids[keyOf(i)] !== undefined;
+  const done = list.filter(isDone);
+  const missed = list.filter(i => !isDone(i) && (i.e <= now || state.skip[keyOf(i)]));
+  const ahead = list.filter(i => !isDone(i) && i.e > now && !state.skip[keyOf(i)]);
+  const notDone = missed.length + unplaced.length;
+  const total = list.length + unplaced.length || 1;
+  const row = (i, cls, btns) => '<div class="ds-item ' + cls + '"><span class="nm">' + esc(i.name) + '<span class="tm">' + (i.s !== undefined ? fmt(i.s) + '–' + fmt(i.e) : 'не поместилось') + '</span></span>' + btns + '</div>';
+  const move = id => '<button type="button" data-tmr="' + id + '">На завтра</button>';
+  const missedHtml = missed.map(i => row(i, '', '<button type="button" class="yes" data-did="' + keyOf(i) + '" aria-label="Всё-таки сделано">✓</button>' + move(i.task.id)))
+    .concat(unplaced.map(t => row({ name: t.name }, '', move(t.id)))).join('');
+  const hid = state.tasks.filter(t => state.hide[t.id]);
+  box.innerHTML = '<div class="card"><div class="ds-nums"><div class="ok"><b>' + done.length + '</b>сделано</div><div class="bad"><b>' + notDone + '</b>не сделано</div><div><b>' + ahead.length + '</b>впереди</div></div>'
+    + '<div class="ds-bar" aria-hidden="true"><i class="ok" style="width:' + (100 * done.length / total) + '%"></i><i class="bad" style="width:' + (100 * notDone / total) + '%"></i></div></div>'
+    + (notDone ? '<div class="card"><div class="ds-head"><div class="eyebrow">Не сделано</div><button type="button" id="ds-all">Всё на завтра</button></div><div class="ds-list">' + missedHtml + '</div></div>' : '')
+    + (done.length ? '<div class="card"><div class="eyebrow">Сделано</div><div class="ds-list">' + done.map(i => row(i, 'done', '')).join('') + '</div></div>' : '')
+    + (hid.length ? '<div class="card"><div class="eyebrow">Перенесено на завтра</div><div class="ds-list">' + hid.map(t => '<div class="ds-item"><span class="nm">' + esc(t.name) + '</span><button type="button" data-unhide2="' + t.id + '">Вернуть</button></div>').join('') + '</div></div>' : '')
+    + (!list.length && !unplaced.length ? '<div class="note">На сегодня дел нет.</div>' : '');
+}
+$('day-sum').addEventListener('click', e => {
+  const t = id => state.tasks.find(x => x.id === id);
+  const m = e.target.closest('[data-tmr]'), d = e.target.closest('[data-did]'), u = e.target.closest('[data-unhide2]');
+  if (m) { const task = t(m.dataset.tmr); if (task) undoable('«' + task.name + '» перенесено на завтра', () => toTomorrow(task)); }
+  if (d) { markDone(d.dataset.did, true); notify.dismiss(d.dataset.did); render(); }
+  if (u) { delete state.hide[u.dataset.unhide2]; render(); }
+  if (e.target.id === 'ds-all') {
+    const now = nowMin(), { items, unplaced } = buildDay(account.planState(state), todayISO(), todayISO(), now);
+    const ids = new Set(items.filter(i => askable(i) && state.done.ids[keyOf(i)] === undefined && (i.e <= now || state.skip[keyOf(i)])).map(i => i.task.id).concat(unplaced.map(x => x.id)));
+    const tasks = [...ids].map(t).filter(Boolean);
+    undoable('На завтра: ' + tasks.map(x => x.name).join(', '), () => tasks.forEach(toTomorrow));
+  }
+});
 
 // ---------- неделя в цифрах ----------
 /** Записать итог сегодняшнего дня: сколько моих дел в плане и сколько сделано. */
