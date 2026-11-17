@@ -76,6 +76,7 @@
     <div class="group"><div class="eyebrow">Повседневные · каждый день</div><div id="list-daily" class="group"></div></div>
     <div class="group"><div class="eyebrow">Вариативные · раз в несколько дней</div><div id="list-var" class="group"></div></div>
     <div class="group"><div class="eyebrow">Разовые · в конкретный день</div><div id="list-once" class="group"></div></div>
+    <div class="group"><div class="eyebrow">Когда-нибудь · предложу в свободное время</div><div id="list-some" class="group"></div></div>
     <button class="ghost" id="reset-btn">Начать заново с примерных задач</button>
   </section>
 
@@ -138,6 +139,7 @@
       <button type="button" id="f-kind-daily" aria-pressed="true">Повседневная</button>
       <button type="button" id="f-kind-var" aria-pressed="false">Вариативная</button>
       <button type="button" id="f-kind-once" aria-pressed="false">Разовая</button>
+      <button type="button" id="f-kind-some" aria-pressed="false">Когда-нибудь</button>
     </div>
     <div class="grid2">
       <label>Сколько минут<input id="f-dur" type="number" min="5" step="5" value="30"></label>
@@ -197,18 +199,6 @@
     <div class="cal-grid" id="cal-grid"></div>
     <div class="row note"><span class="cal-key work"></span>рабочий<span class="cal-key off"></span>выходной<span class="cal-key changed"></span>изменён вручную</div>
     <div class="note">Нажмите на дату, чтобы сделать её выходной или рабочей. Например, отпуск или рабочая суббота.</div>
-  </div>
-</div>
-<div class="sheet" id="act-sheet" hidden>
-  <div class="panel">
-    <div class="row" style="justify-content:space-between;flex-wrap:nowrap;align-items:flex-start"><div><h2 id="act-title"></h2><div class="note" id="act-sub"></div></div><button type="button" class="ghost" id="act-close">Закрыть</button></div>
-    <div class="act-list">
-      <button type="button" id="act-done"></button>
-      <button type="button" id="act-hide">Убрать на сегодня</button>
-      <button type="button" id="act-tomorrow">Перенести на завтра</button>
-      <button type="button" id="act-edit">Изменить задачу</button>
-      <button type="button" id="act-delete" class="danger">Удалить задачу совсем</button>
-    </div>
   </div>
 </div>
 <div class="sheet" id="time-sheet" hidden>

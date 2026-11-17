@@ -1,4 +1,4 @@
-import { localISO, addDays, daysBetween, typeOfDay, DEFAULT_WORK_WEEK, fmt, human, WHEN_TXT, keyOf, buildDay, pendingChecks, setDone, setSkipped } from './scheduler.js';
+import { localISO, addDays, daysBetween, typeOfDay, DEFAULT_WORK_WEEK, fmt, human, WHEN_TXT, keyOf, buildDay, pendingChecks, setDone, setSkipped, ideaFor } from './scheduler.js';
 import { sampleTasks, newId } from './sample.js';
 import * as notify from './notify.js';
 import { createWheel } from './wheel.js';
@@ -83,6 +83,7 @@ function renderPlan() {
   const rows = items.filter(i => i.type !== 'bg');
   // «сейчас» — дело, которое идёт в эту минуту; если такого нет, ближайшее следующее не отмечаем
   const nowIt = today ? rows.find(i => (i.type === 'task' || i.type === 'fixed') && i.s <= now && now < i.e) : null;
+  usedIdeas = new Set();
   $('timeline').innerHTML = rows.map(it => {
     const key = it.task ? keyOf(it) : '';
     const done = today && key && state.done.ids[key] !== undefined;
@@ -103,6 +104,8 @@ function renderPlan() {
       + (sub ? '<span class="tl-sub">' + esc(sub) + '</span>' : '')
       + (bg ? '<span class="par">' + esc(it.task.name) + ' идёт сама до ' + fmt(bg.e) + ' · можно другое</span>' : '')
       + (skipped ? '<span class="st">Не сделано</span>' : '')
+      + (it.task && it.type !== 'free' && openRow === it.task.id && (today || it.task.kind === 'once') ? '<span class="row-acts"><button type="button" data-act="tomorrow" data-tid="' + it.task.id + '">На завтра</button><button type="button" class="danger" data-act="del" data-tid="' + it.task.id + '">Удалить</button></span>' : '')
+      + (it.type === 'free' ? ideaHtml(it, day) : '')
       + '</div>' + btn + '</div></div>';
   }).join('');
 
@@ -116,6 +119,7 @@ const dateText = iso => new Date(iso + 'T12:00').toLocaleDateString('ru-RU', { w
 /** Короткое описание задачи: длительность, время, дни, частота. */
 function describe(t, all = state.tasks) {
   const p = t.after && all.find(x => x.id === t.after);
+  if (t.kind === 'someday') return human(t.dur) + (t.sh ? ' · <span class="who">' + esc(account.whoText(t)) + '</span>' : '');
   let meta = human(t.dur) + ' · ' + (p ? 'сразу после «' + esc(p.name) + '»' : t.fixed ? 'в ' + t.fixed : WHEN_TXT[t.when]);
   if (t.kind === 'once') meta += ' · ' + dateText(t.date);
   else if (t.kind === 'daily' || (t.days && t.days !== 'all')) meta += ' · ' + daysText(t.days);
@@ -138,6 +142,7 @@ function renderTasks() {
   $('list-var').innerHTML = state.tasks.filter(t => t.kind === 'variable').map(row).join('') || '<div class="note">Пока нет задач</div>';
   const once = state.tasks.filter(t => t.kind === 'once' && t.date >= todayISO()).sort((a, b) => (a.date + a.fixed).localeCompare(b.date + b.fixed));
   $('list-once').innerHTML = once.map(row).join('') || '<div class="note">Пока нет. Например, «в пятницу в 10 к врачу».</div>';
+  $('list-some').innerHTML = state.tasks.filter(t => t.kind === 'someday').map(row).join('') || '<div class="note">Пока пусто. Добавьте то, на что вечно нет времени: «когда-нибудь сходить в кино на 2 часа».</div>';
 }
 
 function renderNotifyCard() {
@@ -161,7 +166,15 @@ export function applyAction(key, action, day) {
 }
 $('timeline').addEventListener('click', e => {
   const b = e.target.closest('.check');
-  if (!b) { const row = e.target.closest('.tl-row[data-tid]'); if (row) openAct(row.dataset.tid, row.dataset.key); return; }
+  if (!b) {
+    const a = e.target.closest('[data-act]');
+    if (a) { rowAction(a.dataset.act, a.dataset.tid); return; }
+    const idea = e.target.closest('[data-idea]');
+    if (idea) { ideaAction(idea); return; }
+    const row = e.target.closest('.tl-row[data-tid]');
+    if (row) { openRow = openRow === row.dataset.tid ? null : row.dataset.tid; renderPlan(); }
+    return;
+  }
   const key = b.dataset.key;
   setDone(state, key, state.done.ids[key] === undefined, todayISO());
   notify.dismiss(key);
@@ -272,13 +285,15 @@ function setKind(k) {
   $('f-kind-daily').setAttribute('aria-pressed', k === 'daily');
   $('f-kind-var').setAttribute('aria-pressed', k === 'variable');
   $('f-kind-once').setAttribute('aria-pressed', k === 'once');
+  $('f-kind-some').setAttribute('aria-pressed', k === 'someday');
   $('f-var-box').hidden = k !== 'variable';
   $('f-date-box').hidden = k !== 'once';
-  $('f-days-box').hidden = k === 'once';
+  $('f-days-box').hidden = k === 'once' || k === 'someday';
 }
 $('f-kind-once').onclick = () => { setKind('once'); if (!$('f-date').value) $('f-date').value = todayISO(); };
 $('f-kind-daily').onclick = () => setKind('daily');
 $('f-kind-var').onclick = () => setKind('variable');
+$('f-kind-some').onclick = () => setKind('someday');
 function openForm(t) {
   editing = t || null;
   $('form-title').textContent = t ? 'Изменить задачу' : 'Новая задача';
@@ -338,41 +353,44 @@ $('del-btn').onclick = () => {
   $('sheet').hidden = true; render();
 };
 
-// ---------- меню задачи по нажатию в плане ----------
-let actTask = null, actKey = '', actArmed = false;
-function openAct(tid, key) {
-  actTask = state.tasks.find(t => t.id === tid); actKey = key;
-  if (!actTask) return;
-  const today = offset === 0, done = today && state.done.ids[key] !== undefined;
-  $('act-title').textContent = actTask.name;
-  $('act-sub').innerHTML = describe(actTask);
-  $('act-done').hidden = !today;
-  $('act-done').textContent = done ? 'Снять отметку «сделано»' : '✓ Отметить сделанным';
-  // повседневное — убрать на сегодня; вариативное — на завтра (завтра оно снова в плане); разовое — сдвинуть дату
-  $('act-hide').hidden = !today || actTask.kind !== 'daily';
-  $('act-tomorrow').hidden = !(actTask.kind === 'once' || (today && actTask.kind === 'variable'));
-  actArmed = false; $('act-delete').textContent = 'Удалить задачу совсем';
-  $('act-sheet').hidden = false;
+// ---------- «когда-нибудь»: подсказка в свободном окне ----------
+const ideaShift = {};
+let usedIdeas = new Set(); // одно и то же дело не предлагаем в двух окнах
+function ideaHtml(it, day) {
+  const len = it.e - it.s, id = day + '@' + it.s;
+  if (len < 20 || (offset === 0 && it.e <= nowMin())) return '';
+  const t = ideaFor(state.tasks.filter(x => account.isMine(x) && !usedIdeas.has(x.id)), len, daysBetween('2026-01-01', day) + it.s, ideaShift[id] || 0);
+  if (!t) return '';
+  usedIdeas.add(t.id);
+  const more = state.tasks.filter(x => x.kind === 'someday' && x.dur <= len).length > 1;
+  return '<span class="idea">Можно: <b>' + esc(t.name) + '</b> · ' + human(t.dur)
+    + '<button type="button" data-idea="add" data-tid="' + t.id + '" data-day="' + day + '" data-s="' + it.s + '">В план</button>'
+    + (more ? '<button type="button" class="ghost" data-idea="next" data-key="' + id + '">Другое</button>' : '') + '</span>';
 }
-const closeAct = () => { $('act-sheet').hidden = true; };
+function ideaAction(b) {
+  if (b.dataset.idea === 'next') { ideaShift[b.dataset.key] = (ideaShift[b.dataset.key] || 0) + 1; renderPlan(); return; }
+  const t = state.tasks.find(x => x.id === b.dataset.tid); if (!t) return;
+  // дело из списка становится разовым на этот день и встаёт в начало свободного окна
+  undoable('«' + t.name + '» в плане на ' + fmt(+b.dataset.s), () => {
+    Object.assign(t, { kind: 'once', date: b.dataset.day, fixed: fmt(+b.dataset.s), after: '', days: 'all' });
+  });
+}
+
+// ---------- нажатие на задачу в плане: «На завтра» и «Удалить» ----------
+let openRow = null; // id задачи, под которой показаны кнопки
 /** Действие с возможностью отменить его из всплывающей подсказки. */
 function undoable(msg, fn) {
   const snap = JSON.stringify({ tasks: state.tasks, hide: state.hide });
-  fn(); closeAct(); render();
+  fn(); openRow = null; render();
   toast(msg, () => { const s = JSON.parse(snap); state.tasks = s.tasks; state.hide = s.hide; render(); });
 }
-$('act-close').onclick = closeAct;
-$('act-sheet').addEventListener('click', e => { if (e.target.id === 'act-sheet') closeAct(); });
-$('act-done').onclick = () => { setDone(state, actKey, state.done.ids[actKey] === undefined, todayISO()); notify.dismiss(actKey); closeAct(); render(); };
-$('act-hide').onclick = () => undoable('«' + actTask.name + '» убрано на сегодня', () => { state.hide[actTask.id] = true; });
-$('act-tomorrow').onclick = () => undoable('«' + actTask.name + '» перенесено на завтра', () => {
-  if (actTask.kind === 'once') actTask.date = addDays(actTask.date, 1); else state.hide[actTask.id] = true;
-});
-$('act-edit').onclick = () => { closeAct(); openForm(actTask); };
-$('act-delete').onclick = () => {
-  if (!actArmed) { actArmed = true; $('act-delete').textContent = 'Точно удалить? Нажмите ещё раз'; return; }
-  undoable('«' + actTask.name + '» удалено', () => deleteTask(actTask));
-};
+function rowAction(act, tid) {
+  const t = state.tasks.find(x => x.id === tid); if (!t) return;
+  if (act === 'del') undoable('«' + t.name + '» удалено', () => deleteTask(t));
+  if (act === 'tomorrow') undoable('«' + t.name + '» перенесено на завтра', () => {
+    if (t.kind === 'once') t.date = addDays(t.date, 1); else state.hide[t.id] = true;
+  });
+}
 $('reset-btn').onclick = () => { state = Object.assign(freshState(), state.sync ? { sync: state.sync } : {}); offset = 0; render(); show('plan'); };
 
 // ---------- установка на телефон (Android, Chrome) ----------
@@ -416,7 +434,7 @@ function parseNow() {
   renderDraft();
 }
 function renderDraft() {
-  const kindName = { daily: 'Повседневная', variable: 'Вариативная', once: 'Разовая' };
+  const kindName = { daily: 'Повседневная', variable: 'Вариативная', once: 'Разовая', someday: 'Когда-нибудь' };
   $('dict-preview').innerHTML = draft.map((t, i) => '<div class="trow"><div><div class="tname">' + esc(t.name) + '<span class="kind">' + kindName[t.kind] + '</span></div><div class="meta">' + describe(t, state.tasks.concat(draft)) + '</div></div><button type="button" class="ghost" data-drop="' + i + '" aria-label="Убрать">✕</button></div>').join('');
   $('dict-add').hidden = !draft.length;
   $('dict-add').textContent = 'Добавить ' + draft.length + ' ' + (draft.length === 1 ? 'задачу' : draft.length < 5 ? 'задачи' : 'задач');

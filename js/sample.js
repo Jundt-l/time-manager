@@ -20,6 +20,8 @@ export function sampleTasks(today) {
     { id: newId(), name: 'Уборка квартиры', kind: 'variable', days: 'all', fixed: '', dur: 45, prio: 2, when: 'any', bg: 0, fin: 0, every: 7, last: ago(8) },
     { id: newId(), name: 'Посудомойка', kind: 'variable', days: 'all', fixed: '', dur: 5, prio: 2, when: 'evening', bg: 90, fin: 10, every: 2, last: ago(2) },
     { id: newId(), name: 'Полить цветы', kind: 'variable', days: 'all', fixed: '', dur: 5, prio: 1, when: 'any', bg: 0, fin: 0, every: 3, last: ago(3) },
+    { id: newId(), name: 'Почитать книгу', kind: 'someday', days: 'all', fixed: '', dur: 30, prio: 1, when: 'any', bg: 0, fin: 0 },
+    { id: newId(), name: 'Сходить в кино', kind: 'someday', days: 'all', fixed: '', dur: 120, prio: 1, when: 'any', bg: 0, fin: 0 },
     { id: newId(), name: 'Купить продукты', kind: 'variable', days: 'all', fixed: '', dur: 40, prio: 2, when: 'evening', bg: 0, fin: 0, every: 5, last: ago(2) },
   ];
 }

@@ -93,3 +93,15 @@ test('команды «поставь», повторы и «на 16:30»', () =
   assert.equal(one('напомни мне позвонить маме').name, 'Позвонить маме');
   assert.equal(one('уборка на 2 часа').dur, 120, '«на 2 часа» — по-прежнему длительность');
 });
+
+test('«когда-нибудь» — список желаний, само в план не встаёт', async () => {
+  const { isDue, ideaFor } = await import('../js/scheduler.js');
+  const t = one('когда-нибудь сходить в кино на 2 часа');
+  assert.equal(t.kind, 'someday'); assert.equal(t.name, 'Сходить в кино'); assert.equal(t.dur, 120);
+  assert.equal(isDue(t, TODAY, TODAY), false);
+  const list = [{ ...t, id: 'a' }, { id: 'b', kind: 'someday', name: 'Почитать', dur: 30 }];
+  assert.equal(ideaFor(list, 40, 0).id, 'b', 'в окно 40 минут кино не влезает');
+  assert.equal(ideaFor(list, 200, 0).id, 'a');
+  assert.equal(ideaFor(list, 200, 0, 1).id, 'b', '«Другое» перебирает варианты');
+  assert.equal(ideaFor(list, 10, 0), null);
+});

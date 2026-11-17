@@ -22,6 +22,16 @@ export const fmt = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + Stri
 export function human(m) { const h = Math.floor(m / 60), r = m % 60; if (!h) return r + ' мин'; return r ? h + ' ч ' + r + ' мин' : h + ' ч'; }
 
 export const WIN = { morning: [null, 12 * 60], day: [12 * 60, 17 * 60], evening: [17 * 60, null], any: [null, null] };
+/**
+ * Что можно сделать в свободное окно: дело из списка «когда-нибудь», которое помещается.
+ * shift перебирает варианты («Другое»).
+ */
+export function ideaFor(tasks, gapLen, seed, shift = 0) {
+  const fit = tasks.filter(t => t.kind === 'someday' && t.dur <= gapLen);
+  if (!fit.length) return null;
+  return fit[(seed + shift) % fit.length];
+}
+
 export const WHEN_TXT = { morning: 'утром', day: 'днём', evening: 'вечером', any: 'когда угодно' };
 
 /** Ключ отметки для пункта плана: id задачи, а для «закончить» ещё и суффикс. */
@@ -32,6 +42,7 @@ export const keyOf = it => it.task.id + (it.sub ? ':' + it.sub : '');
  * `doneToday` — отметки за сегодня: отмеченная сегодня вариативная задача остаётся в сегодняшнем плане.
  */
 export function isDue(t, dayISO, todayISO, doneToday = {}, dayType = dayTypeOf(dayISO)) {
+  if (t.kind === 'someday') return false; // «когда-нибудь» само в план не встаёт, только подсказкой
   if (t.kind === 'once') return t.date === dayISO;
   if (t.days && t.days.startsWith('dow:')) {
     if (!t.days.slice(4).split(',').map(Number).includes(new Date(dayISO + 'T12:00').getDay())) return false;

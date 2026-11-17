@@ -174,7 +174,7 @@ label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;
 input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--surface-2);border:1px solid transparent;border-radius:12px;padding:11px 12px;width:100%}
 textarea{resize:vertical}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;background:var(--surface-2);border-radius:14px;padding:4px}
+.seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;background:var(--surface-2);border-radius:14px;padding:4px}
 .seg button{padding:0 4px;min-height:40px;font-size:14px;border:none;background:transparent;color:var(--muted);border-radius:11px}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 fieldset{border:none;background:var(--surface-2);border-radius:16px;padding:12px;margin:0;display:flex;flex-direction:column;gap:10px}
@@ -209,10 +209,17 @@ button.ghost.danger{color:var(--danger);align-self:flex-start}
 #acc-out{align-self:flex-start}
 .meta .who{color:var(--accent);font-weight:600}
 
-/* меню задачи по нажатию в плане */
-.act-list{display:flex;flex-direction:column;gap:8px}
-.act-list button{text-align:left;background:var(--surface-2);border-color:transparent;min-height:50px;font-size:16px}
-.act-list button.danger{color:var(--danger);background:var(--danger-soft)}
+/* две кнопки под задачей по нажатию */
+.row-acts{display:flex;gap:6px;margin-top:6px}
+.row-acts button{min-height:32px;padding:4px 12px;font-size:13px;border-radius:10px;border:none;background:var(--surface-2);color:var(--ink)}
+.row-acts button.danger{color:var(--danger);background:var(--danger-soft)}
 .tl-row[data-tid] .tl-text{cursor:pointer}
 .hidden-list{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px}
 .hidden-list button{min-height:32px;padding:4px 8px;font-size:13px;color:var(--accent)}
+
+/* подсказка «можно заняться» в свободном окне */
+.idea{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--free-text)}
+.idea b{color:var(--ink);font-weight:600}
+.idea button{min-height:32px;padding:4px 12px;font-size:13px;border-radius:10px;border:none;background:var(--surface);color:var(--free)}
+.idea button.ghost{background:transparent;color:var(--free-text)}
+.tl-row.free .tl-body{display:block}

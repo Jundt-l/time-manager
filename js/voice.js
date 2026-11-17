@@ -135,6 +135,8 @@ export function parsePhrase(phrase, todayISO, existing = []) {
   take(rx('раз в месяц|каждый месяц|ежемесячно'), () => { t.kind = 'variable'; t.every = 30; }) ||
   take(rx('(?:раз в|каждые|каждый) (\\d+) (?:дня|дней|день)'), m => { t.kind = 'variable'; t.every = Math.max(1, +m[1]); });
 
+  take(rx('когда-нибудь|как-нибудь|когда будет время|когда будет свободное время|в свободное время'), () => { t.kind = 'someday'; });
+
   // дата для разового дела
   const once = iso => { t.kind = 'once'; t.date = iso; };
   take(rx('послезавтра'), () => once(addDays(todayISO, 2))) ||
