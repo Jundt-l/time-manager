@@ -43,7 +43,7 @@ jobs:
 
       - name: Функция рассылки
         if: env.SKIP != '1'
-        run: supabase functions deploy push --no-verify-jwt --use-api --project-ref "$PROJECT_REF"
+        run: supabase functions deploy push --no-verify-jwt --use-api --project-ref "$PROJECT_REF" --yes
 
       - name: Вход без подтверждения почты
         if: env.SKIP != '1'
