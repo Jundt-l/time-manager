@@ -123,25 +123,39 @@ Object.keys(tabs).forEach(k => $('tab-' + k).addEventListener('click', () => sho
 
 // ---------- барабан времени, как в будильнике ----------
 const ROW = 36;
-const fill = (el, n) => { el.innerHTML = Array.from({ length: n }, (_, i) => '<div>' + String(i).padStart(2, '0') + '</div>').join(''); };
-fill($('drum-h'), 24); fill($('drum-m'), 60);
+// Барабан замкнутый: после 23 идёт 00, после 59 снова 00.
+// Значения повторяются REPS раз, а после остановки барабан незаметно возвращается в середину.
+const REPS = 9, MID = Math.floor(REPS / 2);
+const DRUMS = { 'drum-h': 24, 'drum-m': 60 };
+const fill = (el, n) => {
+  const one = Array.from({ length: n }, (_, i) => '<div>' + String(i).padStart(2, '0') + '</div>').join('');
+  el.innerHTML = one.repeat(REPS);
+};
+Object.entries(DRUMS).forEach(([idd, n]) => fill($(idd), n));
+const drumIdx = idd => Math.round($(idd).scrollTop / ROW);
+const drumVal = idd => ((drumIdx(idd) % DRUMS[idd]) + DRUMS[idd]) % DRUMS[idd];
+const drumSet = (idd, v) => { $(idd).scrollTop = (MID * DRUMS[idd] + v) * ROW; };
 function setFixed(v) { $('f-fixed').value = v; $('f-fixed-btn').textContent = v || 'Не задано'; }
 function tick() { try { if (navigator.vibrate) navigator.vibrate(6); } catch (e) { /* нет вибрации */ } }
-function readWheel() {
-  const h = Math.round($('drum-h').scrollTop / ROW), m = Math.round($('drum-m').scrollTop / ROW);
-  return String(Math.min(23, Math.max(0, h))).padStart(2, '0') + ':' + String(Math.min(59, Math.max(0, m))).padStart(2, '0');
-}
-['drum-h', 'drum-m'].forEach(idd => {
-  let last = -1;
-  $(idd).addEventListener('scroll', e => {
-    const i = Math.round(e.target.scrollTop / ROW);
+const readWheel = () => String(drumVal('drum-h')).padStart(2, '0') + ':' + String(drumVal('drum-m')).padStart(2, '0');
+Object.keys(DRUMS).forEach(idd => {
+  const el = $(idd);
+  let last = -1, settle = null;
+  el.addEventListener('scroll', () => {
+    const i = drumIdx(idd);
     if (i !== last) { if (last !== -1) tick(); last = i; if (!$('wheel-box').hidden) { setFixed(readWheel()); $('f-after').value = ''; } }
+    clearTimeout(settle);
+    settle = setTimeout(() => {
+      // вернуть в среднюю копию, если ушли далеко к краю
+      const n = DRUMS[idd], copy = Math.floor(drumIdx(idd) / n);
+      if (copy !== MID) { drumSet(idd, drumVal(idd)); last = drumIdx(idd); }
+    }, 150);
   }, { passive: true });
 });
 $('f-fixed-btn').onclick = () => {
   const box = $('wheel-box'); box.hidden = !box.hidden; if (box.hidden) return;
   const v = $('f-fixed').value || '08:00'; const [h, m] = v.split(':').map(Number);
-  $('drum-h').scrollTop = h * ROW; $('drum-m').scrollTop = m * ROW; setFixed(v); $('f-after').value = '';
+  drumSet('drum-h', h); drumSet('drum-m', m); setFixed(v); $('f-after').value = '';
 };
 $('wheel-ok').onclick = () => { $('wheel-box').hidden = true; };
 $('wheel-clear').onclick = () => { setFixed(''); $('wheel-box').hidden = true; };
