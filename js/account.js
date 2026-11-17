@@ -2,7 +2,7 @@
 // Связывает приложение (app.js) с сервером (sync.js) и слиянием данных (merge.js).
 import * as api from './sync.js';
 import { split, stamp, merge, prune, apply, stable } from './merge.js';
-import { localISO, addDays, fmt, keyOf, buildDay } from './scheduler.js';
+import { localISO, addDays, fmt, keyOf, buildDay, typeOfDay, toMin, human } from './scheduler.js';
 import * as notify from './notify.js';
 
 const $ = s => document.getElementById(s);
@@ -19,6 +19,9 @@ const todayISO = () => localISO(new Date());
 
 // ---------- что видно в плане ----------
 /** Моё ли это дело: личное, общее «любой из нас» или общее, назначенное мне. */
+/** id вошедшего пользователя или 'me' без аккаунта. */
+export const myId = () => (user ? user.id : 'me');
+
 export function isMine(t) {
   if (!t.sh || !t.who || t.who === 'any') return true;
   return !user || t.who === user.id;
@@ -113,7 +116,12 @@ async function uploadReminders(st) {
   const today = todayISO(), items = [], view = planState(st);
   for (let d = 0; d < 7; d++) {
     const day = addDays(today, d);
-    buildDay(view, day, today).items.filter(i => i.type === 'task' && i.e < 1440).forEach(i => {
+    const plan = buildDay(view, day, today);
+    if (!st.prefs || st.prefs.morning !== false) {
+      const m = morning(st, plan, day);
+      if (m && m.due.getTime() > Date.now()) items.push({ key: 'info:morning', day, due_at: m.due.toISOString(), title: m.title, body: m.body });
+    }
+    plan.items.filter(i => i.type === 'task' && i.e < 1440).forEach(i => {
       const key = keyOf(i);
       if (d === 0 && (st.done.ids[key] !== undefined || st.skip[key])) return;
       const due = new Date(day + 'T' + fmt(i.e) + ':30');
@@ -125,6 +133,19 @@ async function uploadReminders(st) {
   if (sig === ls.get('tm-rem-sig')) return;
   await api.setReminders(items);
   ls.set('tm-rem-sig', sig);
+}
+
+const plural = (n, one, few, many) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
+/** Утренняя сводка: приходит в момент подъёма. */
+export function morning(st, plan, day) {
+  const wake = st.times[typeOfDay(st, day)].wake;
+  const list = plan.items.filter(i => i.type === 'task' || i.type === 'fixed');
+  const n = list.length;
+  if (!n) return null;
+  const first = list[0];
+  const body = n + ' ' + plural(n, 'дело', 'дела', 'дел') + '. Первое: ' + first.name.toLowerCase() + ' в ' + fmt(first.s) + '. '
+    + (plan.free ? 'Свободно для себя: ' + human(plan.free) + '.' : 'Свободного времени сегодня мало.');
+  return { due: new Date(day + 'T' + fmt(toMin(wake)) + ':00'), title: 'Доброе утро! План на сегодня', body };
 }
 
 /** Включить уведомления с сервера на этом устройстве (после разрешения уведомлений). */
@@ -235,7 +256,8 @@ export function renderProfile() {
   if (notify.needsInstallOnIOS()) notifHtml = '<p class="note">На iPhone сначала добавьте приложение на экран «Домой»: кнопка «Поделиться» в Safari, затем «На экран Домой». Потом откройте его оттуда и вернитесь сюда.</p>';
   else if (ns === 'unsupported') notifHtml = '<p class="note">Этот браузер не умеет показывать уведомления.</p>';
   else if (ns === 'denied') notifHtml = '<p class="note">Уведомления запрещены. Разрешите их для этого приложения в настройках телефона.</p>';
-  else if (ns === 'granted' && pushOn()) notifHtml = '<p><span class="ok">●</span> Напоминания приходят, даже когда приложение закрыто.</p>';
+  else if (ns === 'granted' && pushOn()) notifHtml = '<p><span class="ok">●</span> Напоминания приходят, даже когда приложение закрыто.</p>'
+    + '<label class="switch"><input type="checkbox" id="pref-morning"' + (!st.prefs || st.prefs.morning !== false ? ' checked' : '') + '><span>Утренняя сводка в момент подъёма: сколько дел, что первое и сколько свободного времени</span></label>';
   else notifHtml = '<p class="note">Если время дела прошло, а галочки нет, придёт уведомление «Вы сделали?».</p><button class="primary" id="push-on">Включить напоминания</button>';
 
   box.innerHTML = '<div class="card"><div class="eyebrow">Аккаунт</div><p><b>' + esc(name) + '</b>' + (p.name ? '<br><span class="note">' + esc(user.email) + '</span>' : '') + '</p>'
@@ -246,6 +268,8 @@ export function renderProfile() {
 
   const on = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
   on('acc-out', signOut);
+  const pm = $('pref-morning');
+  if (pm) pm.onchange = () => { const s2 = hooks.getState(); s2.prefs = { ...(s2.prefs || {}), morning: pm.checked }; hooks.save(); hooks.render(); changed(); };
   on('pair-create', () => pairAction(() => api.createPair()));
   on('pair-join', () => pairAction(async () => {
     const code = $('pair-code').value.trim();

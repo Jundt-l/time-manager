@@ -22,10 +22,18 @@ export function split(state) {
   mine.workWeek = state.workWeek || DEFAULT_WORK_WEEK;
   for (const [iso, v] of Object.entries(state.dayOverrides || {})) mine['ov:' + iso] = v;
   const d = state.done.date, marks = {};
-  for (const [k, prev] of Object.entries(state.done.ids)) marks[k] = { done: prev };
+  const by = state.by || {};
+  for (const [k, prev] of Object.entries(state.done.ids)) marks[k] = by[k] ? { done: prev, by: by[k] } : { done: prev };
   for (const [k, on] of Object.entries(state.skip || {})) if (on) marks[k] = { skip: 1 };
   for (const [k, on] of Object.entries(state.hide || {})) if (on) marks[k] = { hide: 1 };
   for (const [k, v] of Object.entries(marks)) (shared.has(k.split(':')[0]) ? ours : mine)['mark:' + d + ':' + k] = v;
+  // статистика: своя — в личном документе, число сделанных общих дел — в документе пары, чтобы видел партнёр
+  const uid = state.sync && state.sync.uid;
+  for (const [iso, h] of Object.entries(state.hist || {})) {
+    mine['hist:' + iso] = h;
+    if (uid && h.sh) ours['stat:' + uid + ':' + iso] = h.sh;
+  }
+  if (state.prefs) mine.prefs = state.prefs;
   return { mine, ours };
 }
 
@@ -44,7 +52,8 @@ export function stamp(prev = {}, cur, now, today) {
   for (const [k, p] of Object.entries(prev)) {
     if (k in out) continue;
     const otherDay = k.startsWith('mark:') && k.slice(5, 15) !== today;
-    if (p.v === null || otherDay) out[k] = p;
+    // статистику партнёра в своём состоянии мы не храним — её тоже не трогаем
+    if (p.v === null || otherDay || k.startsWith('stat:')) out[k] = p;
     else { out[k] = { u: now, v: null }; changed = true; }
   }
   return { entries: out, changed };
@@ -86,11 +95,19 @@ export function apply(state, mine, ours) {
   if (mine.workWeek && mine.workWeek.v) state.workWeek = mine.workWeek.v;
   state.dayOverrides = Object.fromEntries(live(mine, 'ov:').map(([k, e]) => [k.slice(3), e.v]));
   const d = state.done.date, pre = 'mark:' + d + ':';
-  state.done.ids = {}; state.skip = {}; state.hide = {};
+  state.done.ids = {}; state.skip = {}; state.hide = {}; state.by = {};
   for (const [k, e] of live(mine, pre).concat(live(ours, pre))) {
     const key = k.slice(pre.length);
     if (e.v.hide) state.hide[key] = true;
-    else if (e.v.skip) state.skip[key] = true; else state.done.ids[key] = e.v.done;
+    else if (e.v.skip) state.skip[key] = true;
+    else { state.done.ids[key] = e.v.done; if (e.v.by) state.by[key] = e.v.by; }
   }
+  state.hist = Object.fromEntries(live(mine, 'hist:').map(([k, e]) => [k.slice(5), e.v]));
+  state.pstat = {};
+  for (const [k, e] of live(ours, 'stat:')) {
+    const [, uid, iso] = k.split(':');
+    (state.pstat[uid] = state.pstat[uid] || {})[iso] = e.v;
+  }
+  if (mine.prefs && mine.prefs.v) state.prefs = mine.prefs.v;
   return state;
 }

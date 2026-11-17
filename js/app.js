@@ -23,9 +23,14 @@ function save(fromSync = false) {
 }
 let state = load() || freshState();
 function rollDay() {
-  if (state.done.date !== todayISO()) { state.done = { date: todayISO(), ids: {} }; state.skip = {}; state.notified = {}; state.hide = {}; }
+  if (state.done.date !== todayISO()) { state.done = { date: todayISO(), ids: {} }; state.skip = {}; state.notified = {}; state.hide = {}; state.by = {}; }
   if (!state.notified) state.notified = {};
   if (!state.hide) state.hide = {};
+  if (!state.by) state.by = {};
+  if (!state.hist) state.hist = {};
+  // история дольше двух месяцев не нужна
+  const oldHist = addDays(todayISO(), -60);
+  Object.keys(state.hist).forEach(d => { if (d < oldHist) delete state.hist[d]; });
   // разовые дела старше недели больше не нужны
   const old = addDays(todayISO(), -7);
   state.tasks = state.tasks.filter(t => !(t.kind === 'once' && t.date < old));
@@ -109,7 +114,7 @@ function renderPlan() {
       + '</div>' + btn + '</div></div>';
   }).join('');
 
-  if (today) notify.schedule(items, state, now);
+  if (today) { notify.schedule(items, state, now); recordDay(items); }
 }
 const plural = (n, one, few, many) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many; };
 
@@ -153,13 +158,18 @@ function renderNotifyCard() {
   $('notify-btn').hidden = st === 'denied' || notify.needsInstallOnIOS();
 }
 
-function render() { rollDay(); renderPlan(); renderTasks(); renderNotifyCard(); save(); }
+function render() { rollDay(); renderPlan(); renderTasks(); renderNotifyCard(); renderStats(); save(); }
 
 // ---------- отметки ----------
+/** Отметить дело и запомнить, кто отметил (для общих дел и статистики). */
+function markDone(key, on) {
+  setDone(state, key, on, todayISO());
+  if (on) state.by[key] = account.myId(); else delete state.by[key];
+}
 export function applyAction(key, action, day) {
   rollDay();
   if (day && day !== todayISO()) return; // ответ на вчерашнее напоминание уже не нужен
-  if (action === 'done') setDone(state, key, true, todayISO());
+  if (action === 'done') markDone(key, true);
   else if (action === 'skip') setSkipped(state, key, todayISO());
   notify.dismiss(key);
   render();
@@ -176,7 +186,7 @@ $('timeline').addEventListener('click', e => {
     return;
   }
   const key = b.dataset.key;
-  setDone(state, key, state.done.ids[key] === undefined, todayISO());
+  markDone(key, state.done.ids[key] === undefined);
   notify.dismiss(key);
   render();
 });
@@ -352,6 +362,59 @@ $('del-btn').onclick = () => {
   deleteTask(editing);
   $('sheet').hidden = true; render();
 };
+
+// ---------- неделя в цифрах ----------
+/** Записать итог сегодняшнего дня: сколько моих дел в плане и сколько сделано. */
+function recordDay(items) {
+  const me = account.myId();
+  let d = 0, t = 0, sh = 0;
+  items.filter(i => i.type === 'task').forEach(i => {
+    const key = keyOf(i), done = state.done.ids[key] !== undefined, by = state.by[key];
+    if (done && by && by !== me) return; // общее дело сделал партнёр — не моё
+    t++;
+    if (done) { d++; if (i.task.sh) sh++; }
+  });
+  const h = { d, t, sh };
+  const old = state.hist[todayISO()];
+  if (!old || old.d !== d || old.t !== t || old.sh !== sh) state.hist[todayISO()] = h;
+}
+const DOW_MIN = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+let statSel = null;
+function renderStats() {
+  const box = $('stats'); if (!box) return;
+  const today = todayISO(), days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
+  const H = iso => state.hist[iso] || { d: 0, t: 0, sh: 0 };
+  const done = days.reduce((a, iso) => a + H(iso).d, 0), planned = days.reduce((a, iso) => a + H(iso).t, 0);
+  // серия: дни подряд, когда сделано от 70% плана. Сегодня считается, если уже выполнено
+  const good = iso => { const h = H(iso); return h.t > 0 && h.d / h.t >= 0.7; };
+  let streak = good(today) ? 1 : 0;
+  for (let i = 1; i < 60 && good(addDays(today, -i)); i++) streak++;
+  const bars = days.map(iso => {
+    const h = H(iso), pct = h.t ? Math.round(100 * h.d / h.t) : 0;
+    const dd = new Date(iso + 'T12:00');
+    const tip = DOW_MIN[dd.getDay()] + ', ' + dd.getDate() + ': ' + (h.t ? h.d + ' из ' + h.t + ' дел' : 'нет данных');
+    return '<button type="button" class="bar' + (iso === today ? ' today' : '') + (statSel === iso ? ' sel' : '') + '" data-day="' + iso + '" aria-label="' + tip + '">'
+      + '<span class="track"><span class="fill" style="height:' + pct + '%"></span></span><span class="dl">' + DOW_MIN[dd.getDay()] + '</span></button>';
+  }).join('');
+  const sel = statSel && days.includes(statSel) ? statSel : today, sh = H(sel);
+  const sd = new Date(sel + 'T12:00');
+  let pair = '';
+  const pi = account.pairInfo();
+  if (pi && pi.partner) {
+    const mine = days.reduce((a, iso) => a + H(iso).sh, 0);
+    const ps = (state.pstat && state.pstat[pi.partner.id]) || {};
+    const hers = days.reduce((a, iso) => a + (ps[iso] || 0), 0);
+    pair = '<div class="st-row"><span>Общие дела</span><b>вы ' + mine + ' · ' + esc(pi.partner.name || 'партнёр') + ' ' + hers + '</b></div>';
+  }
+  box.innerHTML = '<div class="card stats"><div class="eyebrow">Неделя в цифрах</div>'
+    + '<div class="st-hero"><span class="big">' + done + '</span><span>' + plural(done, 'дело сделано', 'дела сделано', 'дел сделано') + ' за 7 дней' + (planned ? ' · ' + Math.round(100 * done / planned) + '% плана' : '') + '</span></div>'
+    + '<div class="bars" role="group" aria-label="Доля сделанного по дням">' + bars + '</div>'
+    + '<div class="note st-tip">' + DOW_MIN[sd.getDay()] + ', ' + sd.getDate() + ': ' + (sh.t ? 'сделано ' + sh.d + ' из ' + sh.t : 'нет данных') + '</div>'
+    + '<div class="st-row"><span>Серия</span><b>' + (streak ? streak + ' ' + plural(streak, 'день', 'дня', 'дней') + ' подряд' : 'начнётся сегодня') + '</b></div>'
+    + pair
+    + '<div class="note">Серия растёт, когда за день сделано не меньше 70% плана.</div></div>';
+}
+$('stats').addEventListener('click', e => { const b = e.target.closest('[data-day]'); if (b) { statSel = b.dataset.day; renderStats(); } });
 
 // ---------- «когда-нибудь»: подсказка в свободном окне ----------
 const ideaShift = {};

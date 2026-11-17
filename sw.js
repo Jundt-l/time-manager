@@ -1,5 +1,5 @@
 // Service worker: работа без интернета и ответы на уведомления.
-const VERSION = 'v15';
+const VERSION = 'v16';
 const CACHE = 'time-manager-' + VERSION;
 const SHELL = [
   './', './index.html', './css/app.css', './manifest.webmanifest',
@@ -54,9 +54,10 @@ self.addEventListener('push', e => {
     data: { key: d.key, day: d.day },
     icon: './icons/icon-192.png',
     badge: './icons/badge-96.png',
-    actions: d.key ? [{ action: 'done', title: '✓ Сделано' }, { action: 'skip', title: '✗ Не сделал' }] : [],
+    // сводка — просто сообщение; на напоминание о деле можно ответить кнопками
+    actions: d.key && !d.key.startsWith('info:') ? [{ action: 'done', title: '✓ Сделано' }, { action: 'skip', title: '✗ Не сделал' }] : [],
     vibrate: [80, 40, 80],
-    requireInteraction: true,
+    requireInteraction: !(d.key && d.key.startsWith('info:')),
   }));
 });
 

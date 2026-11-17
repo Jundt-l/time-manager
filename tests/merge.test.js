@@ -103,3 +103,21 @@ test('«убрать на сегодня» синхронизируется от
   assert.equal(res.hide.ta1, true);
   assert.equal(res.done.ids.ta1, undefined);
 });
+
+test('кто отметил общее дело и статистика партнёра', () => {
+  const st = base(); st.sync = { uid: 'me' };
+  st.done.ids.ta2 = ''; st.by = { ta2: 'me' };
+  st.hist = { [T]: { d: 3, t: 5, sh: 1 } };
+  const { mine, ours } = split(st);
+  assert.deepEqual(ours['mark:' + T + ':ta2'], { done: '', by: 'me' });
+  assert.deepEqual(mine['hist:' + T], { d: 3, t: 5, sh: 1 });
+  assert.equal(ours['stat:me:' + T], 1);
+  // запись партнёра не превращается в удаление при моём сохранении
+  const prev = { ['stat:her:' + T]: { u: 1, v: 2 } };
+  const r = stamp(prev, ours, 5, T);
+  assert.deepEqual(r.entries['stat:her:' + T], { u: 1, v: 2 });
+  const res = apply(base(), stamp({}, mine, 1, T).entries, merge(r.entries, {}));
+  assert.equal(res.pstat.her[T], 2);
+  assert.equal(res.by.ta2, 'me');
+  assert.equal(res.hist[T].d, 3);
+});
