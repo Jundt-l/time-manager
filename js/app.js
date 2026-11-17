@@ -2,6 +2,7 @@ import { localISO, addDays, daysBetween, typeOfDay, DEFAULT_WORK_WEEK, fmt, huma
 import { sampleTasks, newId } from './sample.js';
 import * as notify from './notify.js';
 import { createWheel } from './wheel.js';
+import { parseDictation } from './voice.js';
 
 const KEY = 'time-manager-v1';
 const todayISO = () => localISO(new Date());
@@ -19,6 +20,9 @@ let state = load() || freshState();
 function rollDay() {
   if (state.done.date !== todayISO()) { state.done = { date: todayISO(), ids: {} }; state.skip = {}; state.notified = {}; }
   if (!state.notified) state.notified = {};
+  // разовые дела старше недели больше не нужны
+  const old = addDays(todayISO(), -7);
+  state.tasks = state.tasks.filter(t => !(t.kind === 'once' && t.date < old));
 }
 rollDay();
 let offset = 0; // 0 = сегодня
@@ -64,20 +68,33 @@ function renderPlan() {
   if (today) notify.schedule(items, state, nowMin());
 }
 
+const DOW_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const daysText = d => d === 'weekday' ? 'рабочие дни' : d === 'weekend' ? 'выходные' : (d && d.startsWith('dow:')) ? 'по ' + d.slice(4).split(',').map(n => DOW_SHORT[+n]).join(', ') : 'каждый день';
+const dateText = iso => new Date(iso + 'T12:00').toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' });
+/** Короткое описание задачи: длительность, время, дни, частота. */
+function describe(t, all = state.tasks) {
+  const p = t.after && all.find(x => x.id === t.after);
+  let meta = human(t.dur) + ' · ' + (p ? 'сразу после «' + esc(p.name) + '»' : t.fixed ? 'в ' + t.fixed : WHEN_TXT[t.when]);
+  if (t.kind === 'once') meta += ' · ' + dateText(t.date);
+  else if (t.kind === 'daily' || (t.days && t.days !== 'all')) meta += ' · ' + daysText(t.days);
+  if (t.bg) meta += ' · фоном ' + human(t.bg);
+  if (t.prio === 3) meta += ' · важно';
+  if (t.kind === 'variable') {
+    const left = t.every - daysBetween(t.last, todayISO());
+    meta += ' · раз в ' + t.every + ' дн. · ' + (left <= 0 ? '<span class="due">пора</span>' : 'через ' + left + ' дн.');
+  }
+  return meta;
+}
+
 function renderTasks() {
   const row = t => {
-    const p = t.after && state.tasks.find(x => x.id === t.after);
-    let meta = human(t.dur) + ' · ' + (p ? 'сразу после «' + esc(p.name) + '»' : t.fixed ? 'в ' + t.fixed : WHEN_TXT[t.when]);
-    if (t.days === 'weekday') meta += ' · рабочие дни'; else if (t.days === 'weekend') meta += ' · выходные';
-    if (t.bg) meta += ' · фоном ' + human(t.bg);
-    if (t.kind === 'variable') {
-      const left = t.every - daysBetween(t.last, todayISO());
-      meta += ' · раз в ' + t.every + ' дн. · ' + (left <= 0 ? '<span class="due">пора</span>' : 'через ' + left + ' дн.');
-    }
+    const meta = describe(t);
     return '<div class="trow"><div><div style="font-weight:600">' + esc(t.name) + '</div><div class="meta">' + meta + '</div></div><button data-edit="' + t.id + '">Изменить</button></div>';
   };
   $('list-daily').innerHTML = state.tasks.filter(t => t.kind === 'daily').map(row).join('') || '<div class="note">Пока нет задач</div>';
   $('list-var').innerHTML = state.tasks.filter(t => t.kind === 'variable').map(row).join('') || '<div class="note">Пока нет задач</div>';
+  const once = state.tasks.filter(t => t.kind === 'once' && t.date >= todayISO()).sort((a, b) => (a.date + a.fixed).localeCompare(b.date + b.fixed));
+  $('list-once').innerHTML = once.map(row).join('') || '<div class="note">Пока нет. Например, «в пятницу в 10 к врачу».</div>';
 }
 
 function renderNotifyCard() {
@@ -206,8 +223,12 @@ function setKind(k) {
   kind = k;
   $('f-kind-daily').setAttribute('aria-pressed', k === 'daily');
   $('f-kind-var').setAttribute('aria-pressed', k === 'variable');
+  $('f-kind-once').setAttribute('aria-pressed', k === 'once');
   $('f-var-box').hidden = k !== 'variable';
+  $('f-date-box').hidden = k !== 'once';
+  $('f-days-box').hidden = k === 'once';
 }
+$('f-kind-once').onclick = () => { setKind('once'); if (!$('f-date').value) $('f-date').value = todayISO(); };
 $('f-kind-daily').onclick = () => setKind('daily');
 $('f-kind-var').onclick = () => setKind('variable');
 function openForm(t) {
@@ -215,7 +236,10 @@ function openForm(t) {
   $('form-title').textContent = t ? 'Изменить задачу' : 'Новая задача';
   $('del-btn').hidden = !t;
   $('f-name').value = t ? t.name : ''; $('f-dur').value = t ? t.dur : 30; $('f-prio').value = t ? t.prio : 2;
-  $('f-when').value = t ? t.when : 'any'; $('f-days').value = t && t.days ? t.days : 'all';
+  $('f-when').value = t ? t.when : 'any'; const dv = t && t.days ? t.days : 'all';
+  $('f-days').querySelectorAll('[data-dow]').forEach(o => o.remove());
+  if (dv.startsWith('dow:')) { const o = document.createElement('option'); o.value = dv; o.dataset.dow = '1'; o.textContent = daysText(dv).replace(/^по/, 'По'); $('f-days').append(o); }
+  $('f-days').value = dv; $('f-date').value = t && t.date ? t.date : todayISO();
   setFixed(t ? t.fixed : ''); $('wheel-box').hidden = true;
   $('f-every').value = t && t.every ? t.every : 7; $('f-ago').value = t && t.last ? daysBetween(t.last, todayISO()) : 0;
   const opts = state.tasks.filter(x => !t || x.id !== t.id).map(x => '<option value="' + x.id + '">' + esc(x.name) + '</option>').join('');
@@ -238,6 +262,7 @@ $('form').addEventListener('submit', e => {
     fixed: $('f-after').value ? '' : $('f-fixed').value, after: $('f-after').value || '', bg: n('f-bg'), fin: n('f-fin'),
   });
   if (kind === 'variable') { t.every = Math.max(1, n('f-every')); t.last = addDays(todayISO(), -n('f-ago')); }
+  if (kind === 'once') t.date = $('f-date').value || todayISO();
   if (!editing) state.tasks.push(t);
   $('sheet').hidden = true; render();
 });
@@ -262,6 +287,48 @@ $('install-btn').onclick = async () => {
   installEvt = null; $('install-card').hidden = true;
 };
 $('install-later').onclick = () => { $('install-card').hidden = true; };
+
+// ---------- надиктовать задачи ----------
+let draft = [];
+const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, listening = false;
+function openDictation() {
+  $('dict-text').value = ''; draft = []; renderDraft();
+  $('dict-mic').hidden = !Speech;
+  $('dict-hint').textContent = Speech
+    ? 'Нажмите на микрофон и говорите. Можно и напечатать.'
+    : 'Нажмите на микрофон на клавиатуре телефона и говорите, или напечатайте.';
+  $('dict-sheet').hidden = false;
+  if (!Speech) $('dict-text').focus();
+}
+function stopMic() { listening = false; $('dict-mic').classList.remove('on'); $('dict-mic').textContent = '🎙 Говорить'; if (rec) try { rec.stop(); } catch (e) { /* уже остановлен */ } }
+$('dict-mic').onclick = () => {
+  if (listening) { stopMic(); return; }
+  rec = new Speech(); rec.lang = 'ru-RU'; rec.interimResults = true; rec.continuous = true;
+  const base = $('dict-text').value ? $('dict-text').value.replace(/\s*$/, '. ') : '';
+  rec.onresult = e => { let txt = ''; for (const r of e.results) txt += r[0].transcript; $('dict-text').value = base + txt; };
+  rec.onend = () => { if (listening) stopMic(); parseNow(); };
+  rec.onerror = () => stopMic();
+  try { rec.start(); listening = true; $('dict-mic').classList.add('on'); $('dict-mic').textContent = '■ Остановить'; } catch (e) { stopMic(); }
+};
+function parseNow() {
+  draft = parseDictation($('dict-text').value, todayISO(), state.tasks, newId);
+  renderDraft();
+}
+function renderDraft() {
+  const kindName = { daily: 'Повседневная', variable: 'Вариативная', once: 'Разовая' };
+  $('dict-preview').innerHTML = draft.map((t, i) => '<div class="trow"><div><div style="font-weight:600">' + esc(t.name) + ' <span class="tag par" style="color:var(--accent);background:var(--accent-soft)">' + kindName[t.kind] + '</span></div><div class="meta">' + describe(t, state.tasks.concat(draft)) + '</div></div><button type="button" class="ghost" data-drop="' + i + '" aria-label="Убрать">✕</button></div>').join('');
+  $('dict-add').hidden = !draft.length;
+  $('dict-add').textContent = 'Добавить ' + draft.length + ' ' + (draft.length === 1 ? 'задачу' : draft.length < 5 ? 'задачи' : 'задач');
+  $('dict-empty').hidden = !!draft.length || !$('dict-text').value.trim();
+}
+let parseTimer = null;
+$('dict-text').addEventListener('input', () => { clearTimeout(parseTimer); parseTimer = setTimeout(parseNow, 400); });
+$('dict-preview').addEventListener('click', e => { const b = e.target.closest('[data-drop]'); if (b) { draft.splice(+b.dataset.drop, 1); renderDraft(); } });
+$('dict-add').onclick = () => { state.tasks.push(...draft); draft = []; stopMic(); $('dict-sheet').hidden = true; render(); };
+$('dict-close').onclick = () => { stopMic(); $('dict-sheet').hidden = true; };
+$('dict-btn').onclick = openDictation;
+$('dict-btn-plan').onclick = openDictation;
 
 // ---------- запуск ----------
 notify.init(applyAction);

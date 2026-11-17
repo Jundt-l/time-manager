@@ -32,7 +32,10 @@ export const keyOf = it => it.task.id + (it.sub ? ':' + it.sub : '');
  * `doneToday` — отметки за сегодня: отмеченная сегодня вариативная задача остаётся в сегодняшнем плане.
  */
 export function isDue(t, dayISO, todayISO, doneToday = {}, dayType = dayTypeOf(dayISO)) {
-  if (t.days && t.days !== 'all' && t.days !== dayType) return false;
+  if (t.kind === 'once') return t.date === dayISO;
+  if (t.days && t.days.startsWith('dow:')) {
+    if (!t.days.slice(4).split(',').map(Number).includes(new Date(dayISO + 'T12:00').getDay())) return false;
+  } else if (t.days && t.days !== 'all' && t.days !== dayType) return false;
   if (t.kind !== 'variable') return true;
   if (dayISO === todayISO && doneToday[t.id] !== undefined) return true;
   return daysBetween(t.last, dayISO) >= t.every;

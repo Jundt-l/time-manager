@@ -1,9 +1,9 @@
 // Service worker: работа без интернета и ответы на уведомления.
-const VERSION = 'v6';
+const VERSION = 'v7';
 const CACHE = 'time-manager-' + VERSION;
 const SHELL = [
   './', './index.html', './css/app.css', './manifest.webmanifest',
-  './js/app.js', './js/scheduler.js', './js/sample.js', './js/notify.js', './js/inbox.js', './js/wheel.js',
+  './js/app.js', './js/scheduler.js', './js/sample.js', './js/notify.js', './js/inbox.js', './js/wheel.js', './js/voice.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/badge-96.png',
 ];
 

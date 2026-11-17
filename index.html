@@ -48,6 +48,7 @@
       <div class="tfield"><span>Отбой <span class="dt-label">в рабочие дни</span></span><button type="button" class="timebtn" id="sleep">23:00</button></div>
     </div>
     <div id="unplaced" style="display:flex;flex-direction:column;gap:6px"></div>
+    <button id="dict-btn-plan" class="dict-big">🎙 Надиктовать новые дела</button>
     <div class="tl" id="timeline"></div>
   </section>
 
@@ -55,10 +56,11 @@
   <section id="view-tasks" class="wrap" hidden style="gap:18px">
     <div class="row" style="justify-content:space-between">
       <h2>Мои задачи</h2>
-      <button class="primary" id="add-btn">Добавить</button>
+      <div class="row"><button id="dict-btn">🎙 Надиктовать</button><button class="primary" id="add-btn">Добавить</button></div>
     </div>
     <div class="group"><div class="eyebrow">Повседневные · каждый день</div><div id="list-daily" class="group"></div></div>
     <div class="group"><div class="eyebrow">Вариативные · раз в несколько дней</div><div id="list-var" class="group"></div></div>
+    <div class="group"><div class="eyebrow">Разовые · в конкретный день</div><div id="list-once" class="group"></div></div>
     <button class="ghost" id="reset-btn">Начать заново с примерных задач</button>
   </section>
 
@@ -114,6 +116,7 @@
     <div class="seg" role="group" aria-label="Вид задачи">
       <button type="button" id="f-kind-daily" aria-pressed="true">Повседневная</button>
       <button type="button" id="f-kind-var" aria-pressed="false">Вариативная</button>
+      <button type="button" id="f-kind-once" aria-pressed="false">Разовая</button>
     </div>
     <div class="grid2">
       <label>Сколько минут<input id="f-dur" type="number" min="5" step="5" value="30"></label>
@@ -127,7 +130,8 @@
       <div id="form-wheel"></div>
       <div class="row" style="justify-content:space-between"><button type="button" class="ghost" id="wheel-clear">Без точного времени</button><button type="button" id="wheel-ok">Готово</button></div>
     </div>
-    <label>Какие дни<select id="f-days"><option value="all">Все дни</option><option value="weekday">Только рабочие дни</option><option value="weekend">Только выходные</option></select></label>
+    <label id="f-date-box" hidden>Дата<input id="f-date" type="date"></label>
+    <label id="f-days-box">Какие дни<select id="f-days"><option value="all">Все дни</option><option value="weekday">Только рабочие дни</option><option value="weekend">Только выходные</option></select></label>
     <label>Или начать сразу после<select id="f-after"><option value="">Не привязана</option></select></label>
     <fieldset id="f-var-box" hidden>
       <legend>Как часто</legend>
@@ -150,6 +154,18 @@
   </form>
 </div>
 
+<div class="sheet" id="dict-sheet" hidden>
+  <div class="panel">
+    <div class="row" style="justify-content:space-between"><h2>Надиктовать дела</h2><button type="button" class="ghost" id="dict-close">Закрыть</button></div>
+    <div class="note" id="dict-hint"></div>
+    <textarea id="dict-text" rows="4" placeholder="Например: тренировка вечером на час каждый день, стирка раз в 4 дня, в пятницу в 10 к врачу"></textarea>
+    <button type="button" id="dict-mic">🎙 Говорить</button>
+    <div class="note">Понимаю время («в 7:30», «в 8 вечера»), длительность («на час», «на 20 минут»), частоту («каждый день», «по будням», «раз в неделю», «по субботам»), дату («завтра», «в пятницу», «25 декабря») и «сразу после работы».</div>
+    <div class="note" id="dict-empty" hidden>Пока не понял ни одного дела. Попробуйте назвать дело и когда его делать.</div>
+    <div class="group" id="dict-preview"></div>
+    <button type="button" class="primary" id="dict-add" hidden>Добавить</button>
+  </div>
+</div>
 <div class="sheet" id="cal-sheet" hidden>
   <div class="panel">
     <div class="row" style="justify-content:space-between"><h2>Рабочие дни</h2><button type="button" class="primary" id="cal-done">Готово</button></div>
