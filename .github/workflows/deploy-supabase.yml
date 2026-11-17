@@ -38,8 +38,8 @@ jobs:
         if: env.SKIP != '1'
         run: |
           sed -i "s/__PROJECT_REF__/$PROJECT_REF/g" supabase/migrations/*.sql
-          supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-          supabase db push --password "$SUPABASE_DB_PASSWORD"
+          supabase link --project-ref "$PROJECT_REF"
+          supabase db push --linked --include-all --yes
 
       - name: Функция рассылки
         if: env.SKIP != '1'
