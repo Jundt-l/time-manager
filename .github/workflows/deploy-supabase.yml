@@ -66,3 +66,14 @@ jobs:
           git add js/config.js
           git commit -m "Адрес сервера Supabase для приложения"
           git push
+
+      - name: Проверка сервера
+        if: env.SKIP != '1'
+        run: |
+          URL="https://$PROJECT_REF.supabase.co/functions/v1/push"
+          KEY=$(curl -fsS "$URL" | jq -r .publicKey)
+          if [ -z "$KEY" ] || [ "$KEY" = "null" ]; then echo "::error::Функция не отдала ключ уведомлений"; exit 1; fi
+          echo "Ключ уведомлений есть"
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$URL")
+          [ "$CODE" = "403" ] || { echo "::error::Рассылка без секрета вернула $CODE, ожидалось 403"; exit 1; }
+          echo "Рассылка закрыта секретом"
