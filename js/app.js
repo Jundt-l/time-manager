@@ -94,12 +94,14 @@ export function applyAction(key, action) {
   rollDay();
   if (action === 'done') setDone(state, key, true, todayISO());
   else if (action === 'skip') setSkipped(state, key, todayISO());
+  notify.dismiss(key);
   render();
 }
 $('timeline').addEventListener('click', e => {
   const b = e.target.closest('.check'); if (!b) return;
   const key = b.dataset.key;
   setDone(state, key, state.done.ids[key] === undefined, todayISO());
+  notify.dismiss(key);
   render();
 });
 $('checks').addEventListener('click', e => {

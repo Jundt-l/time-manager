@@ -71,3 +71,11 @@ export function schedule(items, state, nowMin) {
     }
   });
 }
+
+/** Закрыть уведомление по делу, на которое уже ответили в приложении. */
+export async function dismiss(key) {
+  try {
+    const r = reg || await navigator.serviceWorker.ready;
+    (await r.getNotifications({ tag: key })).forEach(n => n.close());
+  } catch (e) { /* уведомлений нет */ }
+}
