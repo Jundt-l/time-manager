@@ -1,12 +1,15 @@
 // Уведомления «Вы сделали…?» с кнопками ✓ и ✗.
 // Android: кнопки прямо в уведомлении. iPhone: веб-уведомления без кнопок, нажатие открывает приложение.
-// Пока нет сервера (шаг 3), уведомления приходят, только если приложение недавно открывали и телефон его не выгрузил.
-import { keyOf, fmt } from './scheduler.js';
+// Без аккаунта уведомления приходят, только если приложение недавно открывали. С аккаунтом их присылает сервер.
+import { keyOf, fmt, localISO } from './scheduler.js';
 import { inboxTake } from './inbox.js';
 
 let reg = null;
 let onAction = () => {};
 let timers = [];
+let serverPush = false;
+/** Напоминания присылает сервер: свои таймеры не нужны, иначе придёт два уведомления. */
+export function setServerPush(on) { serverPush = on; if (on) { timers.forEach(clearTimeout); timers = []; } }
 
 export const supported = () => 'Notification' in window && 'serviceWorker' in navigator;
 export const status = () => (supported() ? Notification.permission : 'unsupported');
@@ -27,7 +30,7 @@ export async function init(applyAction) {
   });
   try { reg = await navigator.serviceWorker.register('./sw.js'); } catch (e) { return; }
   // проверять обновления при каждом возвращении в приложение
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && reg) reg.update().catch(() => {}); });
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data && e.data.type === 'action') drainInbox();
   });
@@ -36,7 +39,7 @@ export async function init(applyAction) {
 
 export async function drainInbox() {
   const list = await inboxTake();
-  list.forEach(({ key, action }) => onAction(key, action));
+  list.forEach(({ key, action, day }) => onAction(key, action, day));
 }
 
 export async function requestPermission() {
@@ -51,7 +54,7 @@ async function show(it) {
   await r.showNotification('Вы сделали «' + it.name + '»?', {
     body: 'По плану было ' + fmt(it.s) + '–' + fmt(it.e),
     tag: key,
-    data: { key },
+    data: { key, day: localISO(new Date()) },
     icon: './icons/icon-192.png',
     badge: './icons/badge-96.png',
     actions: [{ action: 'done', title: '✓ Сделано' }, { action: 'skip', title: '✗ Не сделал' }],
@@ -66,7 +69,7 @@ async function show(it) {
  */
 export function schedule(items, state, nowMin) {
   timers.forEach(clearTimeout); timers = [];
-  if (status() !== 'granted') return;
+  if (status() !== 'granted' || serverPush) return;
   const pending = it => state.done.ids[keyOf(it)] === undefined && !state.skip[keyOf(it)];
   items.filter(it => it.type === 'task').forEach(it => {
     const key = keyOf(it);

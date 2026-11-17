@@ -1,0 +1,6 @@
+# Минимальная конфигурация Supabase CLI. Проект указывается при деплое (secrets.SUPABASE_PROJECT_REF).
+project_id = "time-manager"
+
+[functions.push]
+# Функцию вызывает планировщик базы (pg_cron) с секретным заголовком, а приложение — за публичным ключом.
+verify_jwt = false

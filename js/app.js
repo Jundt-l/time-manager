@@ -3,6 +3,7 @@ import { sampleTasks, newId } from './sample.js';
 import * as notify from './notify.js';
 import { createWheel } from './wheel.js';
 import { parseDictation } from './voice.js';
+import * as account from './account.js';
 
 const KEY = 'time-manager-v1';
 const todayISO = () => localISO(new Date());
@@ -15,7 +16,11 @@ function freshState() {
   return { v: 1, tasks: sampleTasks(todayISO()), times: { weekday: { wake: '07:00', sleep: '23:00' }, weekend: { wake: '09:00', sleep: '23:30' } }, done: { date: todayISO(), ids: {} }, skip: {}, notified: {} };
 }
 function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.tasks) return s; } catch (e) { /* пусто */ } return null; }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* хранилище недоступно */ } }
+/** Сохранить на телефоне. Если вошли в аккаунт и что-то поменялось, изменения уйдут на сервер. */
+function save(fromSync = false) {
+  if (!fromSync && account.restamp(state)) account.changed();
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* хранилище недоступно */ }
+}
 let state = load() || freshState();
 function rollDay() {
   if (state.done.date !== todayISO()) { state.done = { date: todayISO(), ids: {} }; state.skip = {}; state.notified = {}; }
@@ -33,7 +38,7 @@ const CHECK = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="
 
 function renderPlan() {
   const day = viewISO(), today = offset === 0, dt = typeOfDay(state, day);
-  const { items, unplaced, free, moved } = buildDay(state, day, todayISO());
+  const { items, unplaced, free, moved } = buildDay(account.planState(state), day, todayISO());
   const now = today ? nowMin() : -1;
 
   // шапка: «Сегодня» / «Завтра» / день недели, дата мелко сверху
@@ -112,6 +117,7 @@ function describe(t, all = state.tasks) {
   else if (t.kind === 'daily' || (t.days && t.days !== 'all')) meta += ' · ' + daysText(t.days);
   if (t.bg) meta += ' · фоном ' + human(t.bg);
   if (t.prio === 3 && !t.fixed && !t.after) meta += ' · важно';
+  if (t.sh) meta += ' · <span class="who">' + esc(account.whoText(t)) + '</span>';
   if (t.kind === 'variable') {
     const left = t.every - daysBetween(t.last, todayISO());
     meta += ' · раз в ' + t.every + ' дн. · ' + (left <= 0 ? '<span class="due">пора</span>' : 'через ' + left + ' дн.');
@@ -141,8 +147,9 @@ function renderNotifyCard() {
 function render() { rollDay(); renderPlan(); renderTasks(); renderNotifyCard(); save(); }
 
 // ---------- отметки ----------
-export function applyAction(key, action) {
+export function applyAction(key, action, day) {
   rollDay();
+  if (day && day !== todayISO()) return; // ответ на вчерашнее напоминание уже не нужен
   if (action === 'done') setDone(state, key, true, todayISO());
   else if (action === 'skip') setSkipped(state, key, todayISO());
   notify.dismiss(key);
@@ -163,13 +170,14 @@ $('checks').addEventListener('click', e => {
 $('prev-day').onclick = () => { offset--; render(); };
 $('next-day').onclick = () => { offset++; render(); };
 $('to-today').onclick = () => { offset = 0; render(); };
-$('notify-btn').onclick = async () => { await notify.requestPermission(); render(); };
+$('notify-btn').onclick = async () => { await notify.requestPermission(); render(); await account.enablePush(); };
 
 // ---------- вкладки ----------
 const tabs = { plan: 'view-plan', tasks: 'view-tasks', idea: 'view-idea' };
 function show(name) {
   Object.entries(tabs).forEach(([k, v]) => { $(v).hidden = k !== name; $('tab-' + k).setAttribute('aria-selected', k === name); });
   $('dict-btn-plan').hidden = name === 'idea';
+  if (name === 'idea') account.renderProfile();
   window.scrollTo(0, 0);
 }
 Object.keys(tabs).forEach(k => $('tab-' + k).addEventListener('click', () => show(k)));
@@ -279,6 +287,13 @@ function openForm(t) {
   const opts = state.tasks.filter(x => !t || x.id !== t.id).map(x => '<option value="' + x.id + '">' + esc(x.name) + '</option>').join('');
   $('f-after').innerHTML = '<option value="">Не привязана</option>' + opts; $('f-after').value = t && t.after ? t.after : '';
   $('f-bg').value = t ? t.bg : 0; $('f-fin').value = t ? t.fin : 0;
+  const pi = account.pairInfo();
+  $('f-who-box').hidden = !pi;
+  if (pi) {
+    $('f-who').innerHTML = '<option value="">Только моё</option><option value="any">Общее: любой из нас</option><option value="' + pi.me + '">Общее: делаю я</option>'
+      + (pi.partner ? '<option value="' + esc(pi.partner.id) + '">Общее: делает ' + esc(pi.partner.name || 'партнёр') + '</option>' : '');
+    $('f-who').value = t && t.sh ? (t.who || 'any') : '';
+  }
   setKind(t ? t.kind : 'daily');
   $('sheet').hidden = false; $('f-name').focus();
 }
@@ -289,7 +304,9 @@ $('view-tasks').addEventListener('click', e => { const b = e.target.closest('[da
 $('form').addEventListener('submit', e => {
   e.preventDefault();
   const n = x => Math.max(0, parseInt($(x).value, 10) || 0);
-  const t = editing || { id: newId() };
+  // пока форма была открыта, синхронизация могла заменить задачу свежей копией: ищем по id
+  const cur = editing && state.tasks.find(x => x.id === editing.id);
+  const t = cur || editing || { id: newId() };
   Object.assign(t, {
     name: $('f-name').value.trim() || 'Без названия', kind, dur: Math.max(5, n('f-dur')), prio: +$('f-prio').value,
     when: $('f-when').value, days: $('f-days').value,
@@ -297,7 +314,9 @@ $('form').addEventListener('submit', e => {
   });
   if (kind === 'variable') { t.every = Math.max(1, n('f-every')); t.last = addDays(todayISO(), -n('f-ago')); }
   if (kind === 'once') t.date = $('f-date').value || todayISO();
-  if (!editing) state.tasks.push(t);
+  const who = $('f-who-box').hidden ? (t.sh ? (t.who || 'any') : '') : $('f-who').value;
+  if (who) { t.sh = 1; t.who = who; } else { delete t.sh; delete t.who; }
+  if (!cur) state.tasks.push(t);
   $('sheet').hidden = true; render();
 });
 let delArmed = false;
@@ -305,10 +324,10 @@ $('del-btn').onclick = () => {
   if (!delArmed) { delArmed = true; $('del-btn').textContent = 'Точно удалить?'; setTimeout(() => { delArmed = false; $('del-btn').textContent = 'Удалить'; }, 3000); return; }
   delArmed = false; $('del-btn').textContent = 'Удалить';
   state.tasks.forEach(t => { if (t.after === editing.id) { t.after = ''; if (!t.fixed && editing.fixed) t.fixed = editing.fixed; } });
-  state.tasks = state.tasks.filter(t => t !== editing);
+  state.tasks = state.tasks.filter(t => t.id !== editing.id);
   $('sheet').hidden = true; render();
 };
-$('reset-btn').onclick = () => { state = freshState(); offset = 0; render(); show('plan'); };
+$('reset-btn').onclick = () => { state = Object.assign(freshState(), state.sync ? { sync: state.sync } : {}); offset = 0; render(); show('plan'); };
 
 // ---------- установка на телефон (Android, Chrome) ----------
 let installEvt = null;
@@ -366,10 +385,11 @@ $('dict-btn-plan').onclick = openDictation;
 
 // ---------- запуск ----------
 notify.init(applyAction);
+account.init({ getState: () => state, save, render, roll: rollDay });
 // ответ из уведомления, если приложение открыли нажатием на него
 const params = new URLSearchParams(location.search);
 if (params.get('key') && params.get('action')) {
-  applyAction(params.get('key'), params.get('action'));
+  applyAction(params.get('key'), params.get('action'), params.get('day'));
   history.replaceState(null, '', location.pathname);
 }
 render();
