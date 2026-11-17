@@ -86,3 +86,20 @@ test('напоминание приходит только по прошедши
   setSkipped(st, keyOf(byName(plan, 'Завтрак')), TUE);
   assert.ok(!pendingChecks(plan, st, at).map(i => i.name).includes('Завтрак'));
 });
+
+test('календарь: свой рабочий график и ручные отметки на даты', async () => {
+  const { typeOfDay } = await import('../js/scheduler.js');
+  const st = mk();
+  assert.equal(typeOfDay(st, TUE), 'weekday');
+  st.dayOverrides = { [TUE]: 'weekend' };
+  assert.equal(typeOfDay(st, TUE), 'weekend');
+  const p = buildDay(st, TUE, TUE);
+  assert.equal(byName(p, 'Работа'), undefined, 'в отмеченный выходной работы нет');
+  assert.equal(p.items[0].s, toMin('09:00'), 'и подъём по выходному расписанию');
+  st.dayOverrides = { [SAT]: 'weekday' };
+  assert.ok(byName(buildDay(st, SAT, TUE), 'Работа'), 'рабочая суббота');
+  st.workWeek = [2, 3, 4, 5, 6]; // со вторника по субботу
+  st.dayOverrides = {};
+  assert.equal(typeOfDay(st, '2026-11-16'), 'weekend');
+  assert.equal(typeOfDay(st, SAT), 'weekday');
+});

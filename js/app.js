@@ -1,4 +1,4 @@
-import { localISO, addDays, daysBetween, dayTypeOf, fmt, human, WHEN_TXT, keyOf, buildDay, pendingChecks, setDone, setSkipped } from './scheduler.js';
+import { localISO, addDays, daysBetween, typeOfDay, DEFAULT_WORK_WEEK, fmt, human, WHEN_TXT, keyOf, buildDay, pendingChecks, setDone, setSkipped } from './scheduler.js';
 import { sampleTasks, newId } from './sample.js';
 import * as notify from './notify.js';
 import { createWheel } from './wheel.js';
@@ -28,12 +28,12 @@ const viewISO = () => addDays(todayISO(), offset);
 const CHECK = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 function renderPlan() {
-  const day = viewISO(), today = offset === 0, dt = dayTypeOf(day);
+  const day = viewISO(), today = offset === 0, dt = typeOfDay(state, day);
   const { items, unplaced, free, moved } = buildDay(state, day, todayISO());
-  $('daytype').textContent = dt === 'weekend' ? 'Выходной' : 'Будний день';
+  $('daytype').textContent = dt === 'weekend' ? 'Выходной' : 'Рабочий день';
   $('daytype').className = 'chip' + (dt === 'weekend' ? ' weekend' : '');
   $('to-today').hidden = today;
-  document.querySelectorAll('.dt-label').forEach(e => { e.textContent = dt === 'weekend' ? 'в выходные' : 'в будни'; });
+  document.querySelectorAll('.dt-label').forEach(e => { e.textContent = dt === 'weekend' ? 'в выходные' : 'в рабочие дни'; });
   $('wake').textContent = state.times[dt].wake; $('sleep').textContent = state.times[dt].sleep;
   const dd = new Date(day + 'T12:00').toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
   $('today-title').textContent = today ? 'Сегодня, ' + dd : dd.charAt(0).toUpperCase() + dd.slice(1);
@@ -68,7 +68,7 @@ function renderTasks() {
   const row = t => {
     const p = t.after && state.tasks.find(x => x.id === t.after);
     let meta = human(t.dur) + ' · ' + (p ? 'сразу после «' + esc(p.name) + '»' : t.fixed ? 'в ' + t.fixed : WHEN_TXT[t.when]);
-    if (t.days === 'weekday') meta += ' · будни'; else if (t.days === 'weekend') meta += ' · выходные';
+    if (t.days === 'weekday') meta += ' · рабочие дни'; else if (t.days === 'weekend') meta += ' · выходные';
     if (t.bg) meta += ' · фоном ' + human(t.bg);
     if (t.kind === 'variable') {
       const left = t.every - daysBetween(t.last, todayISO());
@@ -139,8 +139,8 @@ let timeField = null;
 const sheetWheel = createWheel($('time-wheel'), v => { $('time-value').textContent = v; });
 function openTime(k) {
   timeField = k;
-  const dt = dayTypeOf(viewISO());
-  $('time-title').textContent = (k === 'wake' ? 'Подъём' : 'Отбой') + (dt === 'weekend' ? ' в выходные' : ' в будни');
+  const dt = typeOfDay(state, viewISO());
+  $('time-title').textContent = (k === 'wake' ? 'Подъём' : 'Отбой') + (dt === 'weekend' ? ' в выходные' : ' в рабочие дни');
   const v = state.times[dt][k];
   $('time-value').textContent = v;
   $('time-sheet').hidden = false;
@@ -148,10 +148,57 @@ function openTime(k) {
 }
 $('wake').onclick = () => openTime('wake');
 $('sleep').onclick = () => openTime('sleep');
-$('time-ok').onclick = () => { state.times[dayTypeOf(viewISO())][timeField] = sheetWheel.get(); $('time-sheet').hidden = true; render(); };
+$('time-ok').onclick = () => { state.times[typeOfDay(state, viewISO())][timeField] = sheetWheel.get(); $('time-sheet').hidden = true; render(); };
 $('time-cancel').onclick = () => { $('time-sheet').hidden = true; };
 $('time-sheet').addEventListener('click', e => { if (e.target.id === 'time-sheet') $('time-sheet').hidden = true; });
 $('f-after').addEventListener('change', e => { if (e.target.value) { setFixed(''); $('wheel-box').hidden = true; } });
+
+// ---------- календарь рабочих дней ----------
+const WD = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const WD_NUM = [1, 2, 3, 4, 5, 6, 0];
+let calMonth = 0; // смещение месяца от текущего
+function renderCalendar() {
+  const week = state.workWeek || DEFAULT_WORK_WEEK;
+  $('cal-week').innerHTML = WD.map((n, i) => '<button type="button" data-wd="' + WD_NUM[i] + '" aria-pressed="' + week.includes(WD_NUM[i]) + '">' + n + '</button>').join('');
+  const now = new Date(), first = new Date(now.getFullYear(), now.getMonth() + calMonth, 1);
+  $('cal-title').textContent = first.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }).replace(' г.', '');
+  const lead = (first.getDay() + 6) % 7; // понедельник первый
+  const days = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  const today = todayISO();
+  let html = WD.map(n => '<div class="cal-h">' + n + '</div>').join('') + '<div></div>'.repeat(lead);
+  for (let d = 1; d <= days; d++) {
+    const iso = localISO(new Date(first.getFullYear(), first.getMonth(), d));
+    const type = typeOfDay(state, iso), changed = !!(state.dayOverrides && state.dayOverrides[iso]);
+    html += '<button type="button" class="cal-d ' + (type === 'weekend' ? 'off' : 'work') + (changed ? ' changed' : '') + (iso === today ? ' today' : '') + (iso < today ? ' past' : '') + '" data-iso="' + iso + '" aria-label="' + d + ', ' + (type === 'weekend' ? 'выходной' : 'рабочий') + '">' + d + '</button>';
+  }
+  $('cal-grid').innerHTML = html;
+}
+$('daytype').onclick = () => {
+  const v = new Date(viewISO() + 'T12:00'), n = new Date();
+  calMonth = (v.getFullYear() - n.getFullYear()) * 12 + v.getMonth() - n.getMonth();
+  renderCalendar(); $('cal-sheet').hidden = false;
+};
+$('cal-prev').onclick = () => { calMonth--; renderCalendar(); };
+$('cal-next').onclick = () => { calMonth++; renderCalendar(); };
+$('cal-done').onclick = () => { $('cal-sheet').hidden = true; render(); };
+$('cal-sheet').addEventListener('click', e => { if (e.target.id === 'cal-sheet') { $('cal-sheet').hidden = true; render(); } });
+$('cal-week').addEventListener('click', e => {
+  const b = e.target.closest('[data-wd]'); if (!b) return;
+  const n = +b.dataset.wd, week = [...(state.workWeek || DEFAULT_WORK_WEEK)];
+  state.workWeek = week.includes(n) ? week.filter(x => x !== n) : week.concat(n);
+  save(); renderCalendar();
+});
+$('cal-grid').addEventListener('click', e => {
+  const b = e.target.closest('[data-iso]'); if (!b) return;
+  const iso = b.dataset.iso;
+  if (!state.dayOverrides) state.dayOverrides = {};
+  const flipped = typeOfDay(state, iso) === 'weekend' ? 'weekday' : 'weekend';
+  delete state.dayOverrides[iso];
+  // если после снятия отметки день и так нужного типа, отметка не нужна
+  if (typeOfDay(state, iso) !== flipped) state.dayOverrides[iso] = flipped;
+  try { if (navigator.vibrate) navigator.vibrate(6); } catch (err) { /* нет вибрации */ }
+  save(); renderCalendar();
+});
 
 // ---------- форма задачи ----------
 let editing = null, kind = 'daily';

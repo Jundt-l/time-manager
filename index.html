@@ -20,7 +20,7 @@
 <div class="wrap">
   <header>
         <div class="row daynav"><button id="prev-day" aria-label="Предыдущий день">‹</button><h1 id="today-title">Мой день</h1><button id="next-day" aria-label="Следующий день">›</button></div>
-    <div class="row"><span id="daytype" class="chip">Будний день</span><button class="ghost" id="to-today" hidden>Вернуться к сегодня</button></div>
+    <div class="row"><button type="button" id="daytype" class="chip">Рабочий день</button><button class="ghost" id="to-today" hidden>Вернуться к сегодня</button></div>
   </header>
 
   <!-- PLAN -->
@@ -44,8 +44,8 @@
       <div class="stat"><b id="st-par">—</b><span>идут параллельно</span></div>
     </div>
     <div class="row">
-      <div class="tfield"><span>Подъём <span class="dt-label">в будни</span></span><button type="button" class="timebtn" id="wake">07:00</button></div>
-      <div class="tfield"><span>Отбой <span class="dt-label">в будни</span></span><button type="button" class="timebtn" id="sleep">23:00</button></div>
+      <div class="tfield"><span>Подъём <span class="dt-label">в рабочие дни</span></span><button type="button" class="timebtn" id="wake">07:00</button></div>
+      <div class="tfield"><span>Отбой <span class="dt-label">в рабочие дни</span></span><button type="button" class="timebtn" id="sleep">23:00</button></div>
     </div>
     <div id="unplaced" style="display:flex;flex-direction:column;gap:6px"></div>
     <div class="tl" id="timeline"></div>
@@ -75,7 +75,7 @@
       <ul>
         <li><b>Длительность</b> и <b>важность</b> задачи.</li>
         <li><b>Когда удобнее</b>: утром, днём, вечером или когда угодно.</li>
-        <li><b>Будни или выходные.</b> Приложение само знает, какой сегодня день, и берёт нужное расписание: работа только в будни, на выходных свой подъём и отбой.</li>
+        <li><b>Рабочие дни и выходные.</b> Приложение само знает, какой сегодня день, и берёт нужное расписание: работа только в рабочие дни, на выходных свой подъём и отбой. Нажмите на «Рабочий день» под датой, чтобы заранее отметить в календаре выходные, отпуск или рабочую субботу.</li>
         <li><b>Работа фоном.</b> Стирка: 10 минут загрузить, 60 минут машина стирает сама, 10 минут развесить. Пока она стирает, вы свободны для других дел.</li>
       </ul>
     </div>
@@ -127,7 +127,7 @@
       <div id="form-wheel"></div>
       <div class="row" style="justify-content:space-between"><button type="button" class="ghost" id="wheel-clear">Без точного времени</button><button type="button" id="wheel-ok">Готово</button></div>
     </div>
-    <label>Какие дни<select id="f-days"><option value="all">Все дни</option><option value="weekday">Только будни</option><option value="weekend">Только выходные</option></select></label>
+    <label>Какие дни<select id="f-days"><option value="all">Все дни</option><option value="weekday">Только рабочие дни</option><option value="weekend">Только выходные</option></select></label>
     <label>Или начать сразу после<select id="f-after"><option value="">Не привязана</option></select></label>
     <fieldset id="f-var-box" hidden>
       <legend>Как часто</legend>
@@ -150,6 +150,17 @@
   </form>
 </div>
 
+<div class="sheet" id="cal-sheet" hidden>
+  <div class="panel">
+    <div class="row" style="justify-content:space-between"><h2>Рабочие дни</h2><button type="button" class="primary" id="cal-done">Готово</button></div>
+    <div class="note">Обычно я работаю по:</div>
+    <div class="cal-week" id="cal-week"></div>
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><button type="button" id="cal-prev" aria-label="Предыдущий месяц">‹</button><b id="cal-title" style="text-transform:capitalize"></b><button type="button" id="cal-next" aria-label="Следующий месяц">›</button></div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <div class="row note"><span class="cal-key work"></span>рабочий<span class="cal-key off"></span>выходной<span class="cal-key changed"></span>изменён вручную</div>
+    <div class="note">Нажмите на дату, чтобы сделать её выходной или рабочей. Например, отпуск или рабочая суббота.</div>
+  </div>
+</div>
 <div class="sheet" id="time-sheet" hidden>
   <div class="panel">
     <div class="row" style="justify-content:space-between"><h2 id="time-title">Подъём</h2><span class="timeval" id="time-value">07:00</span></div>

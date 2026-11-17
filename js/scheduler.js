@@ -5,6 +5,18 @@ export const localISO = d => d.getFullYear() + '-' + String(d.getMonth() + 1).pa
 export const addDays = (iso, n) => { const d = new Date(iso + 'T12:00'); d.setDate(d.getDate() + n); return localISO(d); };
 export const daysBetween = (fromISO, toISO) => Math.round((Date.parse(toISO + 'T12:00') - Date.parse(fromISO + 'T12:00')) / DAY);
 export const dayTypeOf = iso => { const g = new Date(iso + 'T12:00').getDay(); return (g === 0 || g === 6) ? 'weekend' : 'weekday'; };
+/** Рабочие дни недели по умолчанию: 1 = понедельник … 5 = пятница, 0 = воскресенье. */
+export const DEFAULT_WORK_WEEK = [1, 2, 3, 4, 5];
+/**
+ * Рабочий это день или выходной с учётом настроек: сначала отметка в календаре на эту дату,
+ * затем обычная рабочая неделя пользователя.
+ */
+export function typeOfDay(state, iso) {
+  const o = state.dayOverrides && state.dayOverrides[iso];
+  if (o) return o;
+  const week = state.workWeek || DEFAULT_WORK_WEEK;
+  return week.includes(new Date(iso + 'T12:00').getDay()) ? 'weekday' : 'weekend';
+}
 export const toMin = s => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
 export const fmt = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 export function human(m) { const h = Math.floor(m / 60), r = m % 60; if (!h) return r + ' мин'; return r ? h + ' ч ' + r + ' мин' : h + ' ч'; }
@@ -19,8 +31,8 @@ export const keyOf = it => it.task.id + (it.sub ? ':' + it.sub : '');
  * Попадает ли задача в план дня `dayISO`.
  * `doneToday` — отметки за сегодня: отмеченная сегодня вариативная задача остаётся в сегодняшнем плане.
  */
-export function isDue(t, dayISO, todayISO, doneToday = {}) {
-  if (t.days && t.days !== 'all' && t.days !== dayTypeOf(dayISO)) return false;
+export function isDue(t, dayISO, todayISO, doneToday = {}, dayType = dayTypeOf(dayISO)) {
+  if (t.days && t.days !== 'all' && t.days !== dayType) return false;
   if (t.kind !== 'variable') return true;
   if (dayISO === todayISO && doneToday[t.id] !== undefined) return true;
   return daysBetween(t.last, dayISO) >= t.every;
@@ -34,8 +46,9 @@ export function isDue(t, dayISO, todayISO, doneToday = {}) {
 export function buildDay(state, dayISO, todayISO) {
   const tasks = state.tasks;
   const doneToday = (state.done && state.done.ids) || {};
-  const due = t => isDue(t, dayISO, todayISO, doneToday);
-  const tm = state.times[dayTypeOf(dayISO)];
+  const dayType = typeOfDay(state, dayISO);
+  const due = t => isDue(t, dayISO, todayISO, doneToday, dayType);
+  const tm = state.times[dayType];
   const wake = toMin(tm.wake), sleep = toMin(tm.sleep);
   const busy = [], items = [], unplaced = [], moved = [];
   const clash = (s, e) => busy.some(b => s < b[1] && e > b[0]);
