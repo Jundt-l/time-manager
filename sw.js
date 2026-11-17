@@ -1,14 +1,15 @@
 // Service worker: работа без интернета и ответы на уведомления.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = 'time-manager-' + VERSION;
 const SHELL = [
   './', './index.html', './css/app.css', './manifest.webmanifest',
-  './js/app.js', './js/scheduler.js', './js/sample.js', './js/notify.js', './js/inbox.js',
+  './js/app.js', './js/scheduler.js', './js/sample.js', './js/notify.js', './js/inbox.js', './js/wheel.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/badge-96.png',
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' — брать файлы из сети, а не из кэша браузера, чтобы новая версия была действительно новой
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()

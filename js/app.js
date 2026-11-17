@@ -1,6 +1,7 @@
 import { localISO, addDays, daysBetween, dayTypeOf, fmt, human, WHEN_TXT, keyOf, buildDay, pendingChecks, setDone, setSkipped } from './scheduler.js';
 import { sampleTasks, newId } from './sample.js';
 import * as notify from './notify.js';
+import { createWheel } from './wheel.js';
 
 const KEY = 'time-manager-v1';
 const todayISO = () => localISO(new Date());
@@ -33,7 +34,7 @@ function renderPlan() {
   $('daytype').className = 'chip' + (dt === 'weekend' ? ' weekend' : '');
   $('to-today').hidden = today;
   document.querySelectorAll('.dt-label').forEach(e => { e.textContent = dt === 'weekend' ? 'в выходные' : 'в будни'; });
-  $('wake').value = state.times[dt].wake; $('sleep').value = state.times[dt].sleep;
+  $('wake').textContent = state.times[dt].wake; $('sleep').textContent = state.times[dt].sleep;
   const dd = new Date(day + 'T12:00').toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
   $('today-title').textContent = today ? 'Сегодня, ' + dd : dd.charAt(0).toUpperCase() + dd.slice(1);
 
@@ -112,7 +113,6 @@ $('checks').addEventListener('click', e => {
 $('prev-day').onclick = () => { offset--; render(); };
 $('next-day').onclick = () => { offset++; render(); };
 $('to-today').onclick = () => { offset = 0; render(); };
-['wake', 'sleep'].forEach(k => $(k).addEventListener('change', e => { if (e.target.value) { state.times[dayTypeOf(viewISO())][k] = e.target.value; render(); } }));
 $('notify-btn').onclick = async () => { await notify.requestPermission(); render(); };
 
 // ---------- вкладки ----------
@@ -124,43 +124,33 @@ function show(name) {
 Object.keys(tabs).forEach(k => $('tab-' + k).addEventListener('click', () => show(k)));
 
 // ---------- барабан времени, как в будильнике ----------
-const ROW = 36;
-// Барабан замкнутый: после 23 идёт 00, после 59 снова 00.
-// Значения повторяются REPS раз, а после остановки барабан незаметно возвращается в середину.
-const REPS = 9, MID = Math.floor(REPS / 2);
-const DRUMS = { 'drum-h': 24, 'drum-m': 60 };
-const fill = (el, n) => {
-  const one = Array.from({ length: n }, (_, i) => '<div>' + String(i).padStart(2, '0') + '</div>').join('');
-  el.innerHTML = one.repeat(REPS);
-};
-Object.entries(DRUMS).forEach(([idd, n]) => fill($(idd), n));
-const drumIdx = idd => Math.round($(idd).scrollTop / ROW);
-const drumVal = idd => ((drumIdx(idd) % DRUMS[idd]) + DRUMS[idd]) % DRUMS[idd];
-const drumSet = (idd, v) => { $(idd).scrollTop = (MID * DRUMS[idd] + v) * ROW; };
 function setFixed(v) { $('f-fixed').value = v; $('f-fixed-btn').textContent = v || 'Не задано'; }
-function tick() { try { if (navigator.vibrate) navigator.vibrate(6); } catch (e) { /* нет вибрации */ } }
-const readWheel = () => String(drumVal('drum-h')).padStart(2, '0') + ':' + String(drumVal('drum-m')).padStart(2, '0');
-Object.keys(DRUMS).forEach(idd => {
-  const el = $(idd);
-  let last = -1, settle = null;
-  el.addEventListener('scroll', () => {
-    const i = drumIdx(idd);
-    if (i !== last) { if (last !== -1) tick(); last = i; if (!$('wheel-box').hidden) { setFixed(readWheel()); $('f-after').value = ''; } }
-    clearTimeout(settle);
-    settle = setTimeout(() => {
-      // вернуть в среднюю копию, если ушли далеко к краю
-      const n = DRUMS[idd], copy = Math.floor(drumIdx(idd) / n);
-      if (copy !== MID) { drumSet(idd, drumVal(idd)); last = drumIdx(idd); }
-    }, 150);
-  }, { passive: true });
-});
+const formWheel = createWheel($('form-wheel'), v => { setFixed(v); $('f-after').value = ''; });
 $('f-fixed-btn').onclick = () => {
   const box = $('wheel-box'); box.hidden = !box.hidden; if (box.hidden) return;
-  const v = $('f-fixed').value || '08:00'; const [h, m] = v.split(':').map(Number);
-  drumSet('drum-h', h); drumSet('drum-m', m); setFixed(v); $('f-after').value = '';
+  const v = $('f-fixed').value || '08:00';
+  formWheel.set(v); setFixed(v); $('f-after').value = '';
 };
 $('wheel-ok').onclick = () => { $('wheel-box').hidden = true; };
 $('wheel-clear').onclick = () => { setFixed(''); $('wheel-box').hidden = true; };
+
+// подъём и отбой: тот же барабан в отдельной шторке
+let timeField = null;
+const sheetWheel = createWheel($('time-wheel'), v => { $('time-value').textContent = v; });
+function openTime(k) {
+  timeField = k;
+  const dt = dayTypeOf(viewISO());
+  $('time-title').textContent = (k === 'wake' ? 'Подъём' : 'Отбой') + (dt === 'weekend' ? ' в выходные' : ' в будни');
+  const v = state.times[dt][k];
+  $('time-value').textContent = v;
+  $('time-sheet').hidden = false;
+  sheetWheel.set(v);
+}
+$('wake').onclick = () => openTime('wake');
+$('sleep').onclick = () => openTime('sleep');
+$('time-ok').onclick = () => { state.times[dayTypeOf(viewISO())][timeField] = sheetWheel.get(); $('time-sheet').hidden = true; render(); };
+$('time-cancel').onclick = () => { $('time-sheet').hidden = true; };
+$('time-sheet').addEventListener('click', e => { if (e.target.id === 'time-sheet') $('time-sheet').hidden = true; });
 $('f-after').addEventListener('change', e => { if (e.target.value) { setFixed(''); $('wheel-box').hidden = true; } });
 
 // ---------- форма задачи ----------

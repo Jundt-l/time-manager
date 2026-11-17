@@ -18,7 +18,16 @@ export const needsInstallOnIOS = () => isIOS() && !standalone();
 export async function init(applyAction) {
   onAction = applyAction;
   if (!('serviceWorker' in navigator)) return;
+  // Когда на сайте появилась новая версия, приложение один раз перезагружается само, переустанавливать не нужно.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true; location.reload();
+  });
   try { reg = await navigator.serviceWorker.register('./sw.js'); } catch (e) { return; }
+  // проверять обновления при каждом возвращении в приложение
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data && e.data.type === 'action') drainInbox();
   });

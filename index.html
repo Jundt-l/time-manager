@@ -44,8 +44,8 @@
       <div class="stat"><b id="st-par">—</b><span>идут параллельно</span></div>
     </div>
     <div class="row">
-      <label style="flex:1"><span>Подъём <span class="dt-label">в будни</span></span><input id="wake" type="time" value="07:00"></label>
-      <label style="flex:1"><span>Отбой <span class="dt-label">в будни</span></span><input id="sleep" type="time" value="23:00"></label>
+      <div class="tfield"><span>Подъём <span class="dt-label">в будни</span></span><button type="button" class="timebtn" id="wake">07:00</button></div>
+      <div class="tfield"><span>Отбой <span class="dt-label">в будни</span></span><button type="button" class="timebtn" id="sleep">23:00</button></div>
     </div>
     <div id="unplaced" style="display:flex;flex-direction:column;gap:6px"></div>
     <div class="tl" id="timeline"></div>
@@ -124,7 +124,7 @@
       <div style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted)">Точное время<button type="button" id="f-fixed-btn" class="timebtn">Не задано</button><input id="f-fixed" type="hidden"></div>
     </div>
     <div id="wheel-box" hidden style="display:flex;flex-direction:column;gap:8px">
-      <div class="wheel"><div class="band"></div><div class="drum" id="drum-h" aria-label="Часы"></div><div class="colon">:</div><div class="drum" id="drum-m" aria-label="Минуты"></div></div>
+      <div id="form-wheel"></div>
       <div class="row" style="justify-content:space-between"><button type="button" class="ghost" id="wheel-clear">Без точного времени</button><button type="button" id="wheel-ok">Готово</button></div>
     </div>
     <label>Какие дни<select id="f-days"><option value="all">Все дни</option><option value="weekday">Только будни</option><option value="weekend">Только выходные</option></select></label>
@@ -150,6 +150,13 @@
   </form>
 </div>
 
+<div class="sheet" id="time-sheet" hidden>
+  <div class="panel">
+    <div class="row" style="justify-content:space-between"><h2 id="time-title">Подъём</h2><span class="timeval" id="time-value">07:00</span></div>
+    <div id="time-wheel"></div>
+    <div class="row" style="justify-content:space-between"><button type="button" class="ghost" id="time-cancel">Отмена</button><button type="button" class="primary" id="time-ok">Готово</button></div>
+  </div>
+</div>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>
