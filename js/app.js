@@ -198,6 +198,18 @@ $('del-btn').onclick = () => {
 };
 $('reset-btn').onclick = () => { state = freshState(); offset = 0; render(); show('plan'); };
 
+// ---------- установка на телефон (Android, Chrome) ----------
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('install-card').hidden = false; });
+window.addEventListener('appinstalled', () => { installEvt = null; $('install-card').hidden = true; });
+$('install-btn').onclick = async () => {
+  if (!installEvt) return;
+  installEvt.prompt();
+  try { await installEvt.userChoice; } catch (e) { /* закрыли окно */ }
+  installEvt = null; $('install-card').hidden = true;
+};
+$('install-later').onclick = () => { $('install-card').hidden = true; };
+
 // ---------- запуск ----------
 notify.init(applyAction);
 // ответ из уведомления, если приложение открыли нажатием на него
