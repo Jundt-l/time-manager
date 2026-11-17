@@ -103,3 +103,12 @@ test('календарь: свой рабочий график и ручные �
   assert.equal(typeOfDay(st, '2026-11-16'), 'weekend');
   assert.equal(typeOfDay(st, SAT), 'weekday');
 });
+
+test('убранное на сегодня дело пропадает только из сегодняшнего плана', async () => {
+  const { buildDay } = await import('../js/scheduler.js');
+  const st = { tasks: [{ id: 'a', name: 'Душ', kind: 'daily', days: 'all', fixed: '', dur: 20, prio: 3, when: 'any', bg: 0, fin: 0 }],
+    times: { weekday: { wake: '07:00', sleep: '23:00' }, weekend: { wake: '09:00', sleep: '23:00' } }, done: { ids: {} }, hide: { a: true } };
+  const has = d => buildDay(st, d, '2026-11-17').items.some(i => i.task && i.task.id === 'a');
+  assert.equal(has('2026-11-17'), false);
+  assert.equal(has('2026-11-18'), true);
+});

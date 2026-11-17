@@ -115,7 +115,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .voice-tab[aria-pressed="true"]{background:var(--danger);width:58px;box-shadow:-4px 6px 18px rgb(192 53 43 / .35)}
 @media (prefers-reduced-motion:no-preference){.voice-tab{transition:width .18s, background .18s}.voice-tab[aria-pressed="true"] svg{animation:vpulse 1s ease-in-out infinite}}
 @keyframes vpulse{50%{transform:scale(1.18)}}
-.voice-tab.beat svg{transform:scale(1.25)}
+.voice-tab.beat{box-shadow:0 0 0 10px rgb(192 53 43 / .22), -4px 6px 18px rgb(192 53 43 / .35)}
 /* текст речи: полупрозрачный, нижняя треть экрана */
 .voice-ov{position:fixed;z-index:11;left:0;right:0;bottom:0;height:40vh;pointer-events:none;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;
   padding:24px 76px calc(90px + env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px));
@@ -208,3 +208,11 @@ nav.tabs button[aria-selected="true"]{color:var(--accent);font-weight:700}
 button.ghost.danger{color:var(--danger);align-self:flex-start}
 #acc-out{align-self:flex-start}
 .meta .who{color:var(--accent);font-weight:600}
+
+/* меню задачи по нажатию в плане */
+.act-list{display:flex;flex-direction:column;gap:8px}
+.act-list button{text-align:left;background:var(--surface-2);border-color:transparent;min-height:50px;font-size:16px}
+.act-list button.danger{color:var(--danger);background:var(--danger-soft)}
+.tl-row[data-tid] .tl-text{cursor:pointer}
+.hidden-list{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px}
+.hidden-list button{min-height:32px;padding:4px 8px;font-size:13px;color:var(--accent)}

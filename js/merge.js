@@ -24,6 +24,7 @@ export function split(state) {
   const d = state.done.date, marks = {};
   for (const [k, prev] of Object.entries(state.done.ids)) marks[k] = { done: prev };
   for (const [k, on] of Object.entries(state.skip || {})) if (on) marks[k] = { skip: 1 };
+  for (const [k, on] of Object.entries(state.hide || {})) if (on) marks[k] = { hide: 1 };
   for (const [k, v] of Object.entries(marks)) (shared.has(k.split(':')[0]) ? ours : mine)['mark:' + d + ':' + k] = v;
   return { mine, ours };
 }
@@ -85,10 +86,11 @@ export function apply(state, mine, ours) {
   if (mine.workWeek && mine.workWeek.v) state.workWeek = mine.workWeek.v;
   state.dayOverrides = Object.fromEntries(live(mine, 'ov:').map(([k, e]) => [k.slice(3), e.v]));
   const d = state.done.date, pre = 'mark:' + d + ':';
-  state.done.ids = {}; state.skip = {};
+  state.done.ids = {}; state.skip = {}; state.hide = {};
   for (const [k, e] of live(mine, pre).concat(live(ours, pre))) {
     const key = k.slice(pre.length);
-    if (e.v.skip) state.skip[key] = true; else state.done.ids[key] = e.v.done;
+    if (e.v.hide) state.hide[key] = true;
+    else if (e.v.skip) state.skip[key] = true; else state.done.ids[key] = e.v.done;
   }
   return state;
 }

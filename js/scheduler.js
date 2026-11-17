@@ -50,7 +50,9 @@ export function buildDay(state, dayISO, todayISO) {
   const tasks = state.tasks;
   const doneToday = (state.done && state.done.ids) || {};
   const dayType = typeOfDay(state, dayISO);
-  const due = t => isDue(t, dayISO, todayISO, doneToday, dayType);
+  // «убрать на сегодня» действует только на сегодняшний план
+  const hidden = (dayISO === todayISO && state.hide) || {};
+  const due = t => !hidden[t.id] && isDue(t, dayISO, todayISO, doneToday, dayType);
   const tm = state.times[dayType];
   const wake = toMin(tm.wake), sleep = toMin(tm.sleep);
   const busy = [], items = [], unplaced = [], moved = [];

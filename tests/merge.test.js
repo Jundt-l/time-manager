@@ -94,3 +94,12 @@ test('порядок задач — по времени создания', () =>
   const res = apply({ ...base(), tasks: [] }, mine, ours);
   assert.deepEqual(res.tasks.map(t => t.id), ['ta1', 'ta2']);
 });
+
+test('«убрать на сегодня» синхронизируется отдельно от отметок', () => {
+  const st = base(); st.hide = { ta1: true };
+  const { mine } = split(st);
+  assert.deepEqual(mine['mark:' + T + ':ta1'], { hide: 1 });
+  const res = apply(base(), stampBoth(st).mine, {});
+  assert.equal(res.hide.ta1, true);
+  assert.equal(res.done.ids.ta1, undefined);
+});

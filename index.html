@@ -199,6 +199,18 @@
     <div class="note">Нажмите на дату, чтобы сделать её выходной или рабочей. Например, отпуск или рабочая суббота.</div>
   </div>
 </div>
+<div class="sheet" id="act-sheet" hidden>
+  <div class="panel">
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap;align-items:flex-start"><div><h2 id="act-title"></h2><div class="note" id="act-sub"></div></div><button type="button" class="ghost" id="act-close">Закрыть</button></div>
+    <div class="act-list">
+      <button type="button" id="act-done"></button>
+      <button type="button" id="act-hide">Убрать на сегодня</button>
+      <button type="button" id="act-tomorrow">Перенести на завтра</button>
+      <button type="button" id="act-edit">Изменить задачу</button>
+      <button type="button" id="act-delete" class="danger">Удалить задачу совсем</button>
+    </div>
+  </div>
+</div>
 <div class="sheet" id="time-sheet" hidden>
   <div class="panel">
     <div class="row" style="justify-content:space-between"><h2 id="time-title">Подъём</h2><span class="timeval" id="time-value">07:00</span></div>

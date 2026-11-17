@@ -23,8 +23,9 @@ function save(fromSync = false) {
 }
 let state = load() || freshState();
 function rollDay() {
-  if (state.done.date !== todayISO()) { state.done = { date: todayISO(), ids: {} }; state.skip = {}; state.notified = {}; }
+  if (state.done.date !== todayISO()) { state.done = { date: todayISO(), ids: {} }; state.skip = {}; state.notified = {}; state.hide = {}; }
   if (!state.notified) state.notified = {};
+  if (!state.hide) state.hide = {};
   // разовые дела старше недели больше не нужны
   const old = addDays(todayISO(), -7);
   state.tasks = state.tasks.filter(t => !(t.kind === 'once' && t.date < old));
@@ -67,6 +68,8 @@ function renderPlan() {
   let warn = unplaced.length ? '<div class="alert"><b>Не поместилось:</b> ' + unplaced.map(t => esc(t.name)).join(', ') + '. Попробуйте раньше встать или перенести что-то.</div>' : '';
   const mm = moved.filter(t => t.when === 'morning');
   if (mm.length) warn += '<div class="alert"><b>Утром не хватает времени:</b> ' + mm.map(t => esc(t.name.toLowerCase())).join(', ') + ' (' + human(mm.reduce((a, t) => a + t.dur, 0)) + '). Поставьте подъём раньше, и план сам перенесёт их на утро.</div>';
+  const hid = today ? state.tasks.filter(t => state.hide[t.id]) : [];
+  if (hid.length) warn += '<div class="note hidden-list">Убрано на сегодня: ' + hid.map(t => '<button type="button" class="ghost" data-unhide="' + t.id + '">' + esc(t.name) + ' ↺</button>').join('') + '</div>';
   $('unplaced').innerHTML = warn;
 
   // карточки «Вы сделали…?» внутри приложения
@@ -93,7 +96,8 @@ function renderPlan() {
     else if (it.type === 'fixed') sub = fmt(it.s) + '–' + fmt(it.e);
     else sub = human(it.e - it.s) + (it.why && !it.par ? ' · ' + it.why.split(' · ')[0].toLowerCase() : '');
     const btn = (it.type === 'task' && today) ? '<button class="check" data-key="' + key + '" aria-pressed="' + !!done + '" aria-label="Готово: ' + esc(it.name) + '">' + CHECK + '</button>' : '';
-    return '<div class="' + cls + '"><span class="tl-time">' + fmt(it.s) + '</span><span class="tl-rail"><i class="dot"></i></span><div class="tl-body"><div class="tl-text">'
+    const tid = it.task && it.type !== 'free' ? ' data-tid="' + it.task.id + '" data-key="' + key + '"' : '';
+    return '<div class="' + cls + '"' + tid + '><span class="tl-time">' + fmt(it.s) + '</span><span class="tl-rail"><i class="dot"></i></span><div class="tl-body"><div class="tl-text">'
       + (isNow ? '<span class="now-lbl">СЕЙЧАС · ДО ' + fmt(it.e) + '</span>' : '')
       + '<span class="tl-name">' + esc(it.type === 'free' ? 'Свободное время' : it.name) + '</span>'
       + (sub ? '<span class="tl-sub">' + esc(sub) + '</span>' : '')
@@ -156,7 +160,8 @@ export function applyAction(key, action, day) {
   render();
 }
 $('timeline').addEventListener('click', e => {
-  const b = e.target.closest('.check'); if (!b) return;
+  const b = e.target.closest('.check');
+  if (!b) { const row = e.target.closest('.tl-row[data-tid]'); if (row) openAct(row.dataset.tid, row.dataset.key); return; }
   const key = b.dataset.key;
   setDone(state, key, state.done.ids[key] === undefined, todayISO());
   notify.dismiss(key);
@@ -167,6 +172,7 @@ $('checks').addEventListener('click', e => {
   if (y) applyAction(y.dataset.yes, 'done');
   if (n) applyAction(n.dataset.no, 'skip');
 });
+$('unplaced').addEventListener('click', e => { const b = e.target.closest('[data-unhide]'); if (b) { delete state.hide[b.dataset.unhide]; render(); } });
 $('prev-day').onclick = () => { offset--; render(); };
 $('next-day').onclick = () => { offset++; render(); };
 $('to-today').onclick = () => { offset = 0; render(); };
@@ -319,13 +325,53 @@ $('form').addEventListener('submit', e => {
   if (!cur) state.tasks.push(t);
   $('sheet').hidden = true; render();
 });
+/** Удалить задачу. Дела, которые шли «сразу после» неё, получают её время. */
+function deleteTask(task) {
+  state.tasks.forEach(t => { if (t.after === task.id) { t.after = ''; if (!t.fixed && task.fixed) t.fixed = task.fixed; } });
+  state.tasks = state.tasks.filter(t => t.id !== task.id);
+}
 let delArmed = false;
 $('del-btn').onclick = () => {
   if (!delArmed) { delArmed = true; $('del-btn').textContent = 'Точно удалить?'; setTimeout(() => { delArmed = false; $('del-btn').textContent = 'Удалить'; }, 3000); return; }
   delArmed = false; $('del-btn').textContent = 'Удалить';
-  state.tasks.forEach(t => { if (t.after === editing.id) { t.after = ''; if (!t.fixed && editing.fixed) t.fixed = editing.fixed; } });
-  state.tasks = state.tasks.filter(t => t.id !== editing.id);
+  deleteTask(editing);
   $('sheet').hidden = true; render();
+};
+
+// ---------- меню задачи по нажатию в плане ----------
+let actTask = null, actKey = '', actArmed = false;
+function openAct(tid, key) {
+  actTask = state.tasks.find(t => t.id === tid); actKey = key;
+  if (!actTask) return;
+  const today = offset === 0, done = today && state.done.ids[key] !== undefined;
+  $('act-title').textContent = actTask.name;
+  $('act-sub').innerHTML = describe(actTask);
+  $('act-done').hidden = !today;
+  $('act-done').textContent = done ? 'Снять отметку «сделано»' : '✓ Отметить сделанным';
+  // повседневное — убрать на сегодня; вариативное — на завтра (завтра оно снова в плане); разовое — сдвинуть дату
+  $('act-hide').hidden = !today || actTask.kind !== 'daily';
+  $('act-tomorrow').hidden = !(actTask.kind === 'once' || (today && actTask.kind === 'variable'));
+  actArmed = false; $('act-delete').textContent = 'Удалить задачу совсем';
+  $('act-sheet').hidden = false;
+}
+const closeAct = () => { $('act-sheet').hidden = true; };
+/** Действие с возможностью отменить его из всплывающей подсказки. */
+function undoable(msg, fn) {
+  const snap = JSON.stringify({ tasks: state.tasks, hide: state.hide });
+  fn(); closeAct(); render();
+  toast(msg, () => { const s = JSON.parse(snap); state.tasks = s.tasks; state.hide = s.hide; render(); });
+}
+$('act-close').onclick = closeAct;
+$('act-sheet').addEventListener('click', e => { if (e.target.id === 'act-sheet') closeAct(); });
+$('act-done').onclick = () => { setDone(state, actKey, state.done.ids[actKey] === undefined, todayISO()); notify.dismiss(actKey); closeAct(); render(); };
+$('act-hide').onclick = () => undoable('«' + actTask.name + '» убрано на сегодня', () => { state.hide[actTask.id] = true; });
+$('act-tomorrow').onclick = () => undoable('«' + actTask.name + '» перенесено на завтра', () => {
+  if (actTask.kind === 'once') actTask.date = addDays(actTask.date, 1); else state.hide[actTask.id] = true;
+});
+$('act-edit').onclick = () => { closeAct(); openForm(actTask); };
+$('act-delete').onclick = () => {
+  if (!actArmed) { actArmed = true; $('act-delete').textContent = 'Точно удалить? Нажмите ещё раз'; return; }
+  undoable('«' + actTask.name + '» удалено', () => deleteTask(actTask));
 };
 $('reset-btn').onclick = () => { state = Object.assign(freshState(), state.sync ? { sync: state.sync } : {}); offset = 0; render(); show('plan'); };
 
@@ -391,7 +437,7 @@ function voiceStart() {
   $('voice-text').textContent = ''; $('voice-ov').hidden = false;
   $('dict-btn-plan').setAttribute('aria-pressed', 'true'); $('dict-btn-plan').setAttribute('aria-label', 'Закончить диктовку');
   buzz(20);
-  listen();
+  setTimeout(listen, 80); // вибрация отдельно от записи: моторчик шумит прямо у микрофона
 }
 function listen() {
   const base = vFinal;
@@ -402,9 +448,10 @@ function listen() {
     vFinal = base + fin;
     const shown = (vFinal + interim).replace(/\s+/g, ' ').trim();
     $('voice-text').textContent = shown;
-    // вибрация вслед за голосом: чем больше новых слов, тем сильнее
+    // кнопка пульсирует в такт словам. Вибрации во время записи нет: моторчик шумит у микрофона,
+    // и телефон хуже разбирает речь
     const grow = shown.length - vShown;
-    if (grow > 0) { buzz(Math.min(35, 8 + grow * 2)); $('dict-btn-plan').classList.add('beat'); setTimeout(() => $('dict-btn-plan').classList.remove('beat'), 120); }
+    if (grow > 0) { $('dict-btn-plan').classList.add('beat'); setTimeout(() => $('dict-btn-plan').classList.remove('beat'), 120); }
     vShown = shown.length;
   };
   vRec.onerror = e => {
@@ -415,7 +462,7 @@ function listen() {
   try { vRec.start(); } catch (e) { /* уже слушает */ }
 }
 function voiceStop() {
-  vOn = false; buzz([12, 50, 12]);
+  vOn = false;
   try { vRec.stop(); } catch (e) { /* уже остановлен */ }
   clearTimeout(vDoneTimer); vDoneTimer = setTimeout(voiceFinish, 1500); // если телефон не сообщил об остановке
 }
@@ -425,6 +472,7 @@ function voiceFinish() {
   $('voice-ov').hidden = true;
   $('dict-btn-plan').setAttribute('aria-pressed', 'false'); $('dict-btn-plan').setAttribute('aria-label', 'Надиктовать дела');
   const text = $('voice-text').textContent.trim();
+  buzz([12, 50, 12]);
   if (!text) return;
   const added = parseDictation(text, todayISO(), state.tasks, newId);
   if (!added.length) { toast('Не понял ни одного дела. Попробуйте: «купить продукты в 18:00».'); return; }
