@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Мой день</title>
 <meta name="description" content="Органайзер, который сам раскладывает дела по дню и освобождает время для себя.">
-<meta name="theme-color" content="#3846C4">
+<meta name="theme-color" content="#F6F7FB" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F131C" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -13,14 +14,24 @@
 <meta name="apple-mobile-web-app-title" content="Мой день">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <div class="wrap">
-  <header>
-        <div class="row daynav"><button id="prev-day" aria-label="Предыдущий день">‹</button><h1 id="today-title">Мой день</h1><button id="next-day" aria-label="Следующий день">›</button></div>
-    <div class="row"><button type="button" id="daytype" class="chip">Рабочий день</button><button class="ghost" id="to-today" hidden>Вернуться к сегодня</button></div>
+  <header class="top">
+    <div class="top-row">
+      <span class="date" id="today-date"></span>
+      <div class="daynav">
+        <button class="ghost" id="to-today" hidden>К сегодня</button>
+        <button class="round" id="prev-day" aria-label="Предыдущий день"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button>
+        <button class="round" id="next-day" aria-label="Следующий день"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+      </div>
+    </div>
+    <div class="top-row">
+      <h1 id="today-title">Сегодня</h1>
+      <button type="button" id="daytype" class="chip" aria-label="Календарь рабочих дней">Рабочий день</button>
+    </div>
   </header>
 
   <!-- PLAN -->
@@ -38,17 +49,21 @@
       <button class="primary" id="notify-btn">Включить</button>
     </div>
     <div id="checks" style="display:flex;flex-direction:column;gap:8px"></div>
-    <div class="stats">
-      <div class="stat free"><b id="st-free">—</b><span>свободно для себя</span></div>
-      <div class="stat"><b id="st-count">—</b><span>дел на сегодня</span></div>
-      <div class="stat"><b id="st-par">—</b><span>идут параллельно</span></div>
+    <div class="summary">
+      <div class="sum-main">
+        <svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle class="track" cx="32" cy="32" r="27"></circle><circle class="arc" id="ring-arc" cx="32" cy="32" r="27" stroke-dasharray="0 170" transform="rotate(-90 32 32)"></circle></svg>
+        <div class="sum-text">
+          <span class="lbl">Свободно для себя</span>
+          <span class="big" id="st-free">—</span>
+          <span class="lbl" id="st-sub"></span>
+        </div>
+      </div>
+      <div class="sum-times">
+        <button type="button" class="timechip" id="wake-btn"><span>Подъём</span><b id="wake">07:00</b></button>
+        <button type="button" class="timechip" id="sleep-btn"><span>Отбой</span><b id="sleep">23:00</b></button>
+      </div>
     </div>
-    <div class="row">
-      <div class="tfield"><span>Подъём <span class="dt-label">в рабочие дни</span></span><button type="button" class="timebtn" id="wake">07:00</button></div>
-      <div class="tfield"><span>Отбой <span class="dt-label">в рабочие дни</span></span><button type="button" class="timebtn" id="sleep">23:00</button></div>
-    </div>
-    <div id="unplaced" style="display:flex;flex-direction:column;gap:6px"></div>
-    <button id="dict-btn-plan" class="dict-big">🎙 Надиктовать новые дела</button>
+    <div id="unplaced" style="display:flex;flex-direction:column;gap:8px"></div>
     <div class="tl" id="timeline"></div>
   </section>
 
@@ -56,7 +71,7 @@
   <section id="view-tasks" class="wrap" hidden style="gap:18px">
     <div class="row" style="justify-content:space-between">
       <h2>Мои задачи</h2>
-      <div class="row"><button id="dict-btn">🎙 Надиктовать</button><button class="primary" id="add-btn">Добавить</button></div>
+      <button class="primary" id="add-btn">Добавить</button>
     </div>
     <div class="group"><div class="eyebrow">Повседневные · каждый день</div><div id="list-daily" class="group"></div></div>
     <div class="group"><div class="eyebrow">Вариативные · раз в несколько дней</div><div id="list-var" class="group"></div></div>
@@ -77,7 +92,7 @@
       <ul>
         <li><b>Длительность</b> и <b>важность</b> задачи.</li>
         <li><b>Когда удобнее</b>: утром, днём, вечером или когда угодно.</li>
-        <li><b>Рабочие дни и выходные.</b> Приложение само знает, какой сегодня день, и берёт нужное расписание: работа только в рабочие дни, на выходных свой подъём и отбой. Нажмите на «Рабочий день» под датой, чтобы заранее отметить в календаре выходные, отпуск или рабочую субботу.</li>
+        <li><b>Рабочие дни и выходные.</b> Приложение само знает, какой сегодня день, и берёт нужное расписание: работа только в рабочие дни, на выходных свой подъём и отбой. Нажмите на «Рабочий день» рядом с датой, чтобы заранее отметить в календаре выходные, отпуск или рабочую субботу.</li>
         <li><b>Работа фоном.</b> Стирка: 10 минут загрузить, 60 минут машина стирает сама, 10 минут развесить. Пока она стирает, вы свободны для других дел.</li>
       </ul>
     </div>
@@ -101,11 +116,13 @@
   </section>
 </div>
 
+<button class="fab" id="dict-btn-plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg> Надиктовать</button>
+
 <nav class="tabs" role="tablist">
   <div class="in">
-    <button role="tab" id="tab-plan" aria-selected="true">План дня</button>
-    <button role="tab" id="tab-tasks" aria-selected="false">Задачи</button>
-    <button role="tab" id="tab-idea" aria-selected="false">Как это работает</button>
+    <button role="tab" id="tab-plan" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>План</button>
+    <button role="tab" id="tab-tasks" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"></path></svg>Задачи</button>
+    <button role="tab" id="tab-idea" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>Как работает</button>
   </div>
 </nav>
 
@@ -124,7 +141,7 @@
     </div>
     <div class="grid2">
       <label>Когда удобнее<select id="f-when"><option value="any">Когда угодно</option><option value="morning">Утром</option><option value="day">Днём</option><option value="evening">Вечером</option></select></label>
-      <div style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted)">Точное время<button type="button" id="f-fixed-btn" class="timebtn">Не задано</button><input id="f-fixed" type="hidden"></div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--muted)">Точное время<button type="button" id="f-fixed-btn" class="timebtn">Не задано</button><input id="f-fixed" type="hidden"></div>
     </div>
     <div id="wheel-box" hidden style="display:flex;flex-direction:column;gap:8px">
       <div id="form-wheel"></div>
@@ -159,7 +176,7 @@
     <div class="row" style="justify-content:space-between"><h2>Надиктовать дела</h2><button type="button" class="ghost" id="dict-close">Закрыть</button></div>
     <div class="note" id="dict-hint"></div>
     <textarea id="dict-text" rows="4" placeholder="Например: тренировка вечером на час каждый день, стирка раз в 4 дня, в пятницу в 10 к врачу"></textarea>
-    <button type="button" id="dict-mic">🎙 Говорить</button>
+    <button type="button" id="dict-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg><span>Говорить</span></button>
     <div class="note">Понимаю время («в 7:30», «в 8 вечера»), длительность («на час», «на 20 минут»), частоту («каждый день», «по будням», «раз в неделю», «по субботам»), дату («завтра», «в пятницу», «25 декабря») и «сразу после работы».</div>
     <div class="note" id="dict-empty" hidden>Пока не понял ни одного дела. Попробуйте назвать дело и когда его делать.</div>
     <div class="group" id="dict-preview"></div>
@@ -171,7 +188,7 @@
     <div class="row" style="justify-content:space-between"><h2>Рабочие дни</h2><button type="button" class="primary" id="cal-done">Готово</button></div>
     <div class="note">Обычно я работаю по:</div>
     <div class="cal-week" id="cal-week"></div>
-    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><button type="button" id="cal-prev" aria-label="Предыдущий месяц">‹</button><b id="cal-title" style="text-transform:capitalize"></b><button type="button" id="cal-next" aria-label="Следующий месяц">›</button></div>
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><button type="button" class="round" id="cal-prev" aria-label="Предыдущий месяц"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button><b id="cal-title" style="text-transform:capitalize"></b><button type="button" class="round" id="cal-next" aria-label="Следующий месяц"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button></div>
     <div class="cal-grid" id="cal-grid"></div>
     <div class="row note"><span class="cal-key work"></span>рабочий<span class="cal-key off"></span>выходной<span class="cal-key changed"></span>изменён вручную</div>
     <div class="note">Нажмите на дату, чтобы сделать её выходной или рабочей. Например, отпуск или рабочая суббота.</div>

@@ -34,39 +34,72 @@ const CHECK = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="
 function renderPlan() {
   const day = viewISO(), today = offset === 0, dt = typeOfDay(state, day);
   const { items, unplaced, free, moved } = buildDay(state, day, todayISO());
+  const now = today ? nowMin() : -1;
+
+  // шапка: «Сегодня» / «Завтра» / день недели, дата мелко сверху
+  const d = new Date(day + 'T12:00');
+  const wd = d.toLocaleDateString('ru-RU', { weekday: 'long' });
+  const dm = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+  const rel = { 0: 'Сегодня', 1: 'Завтра', '-1': 'Вчера' }[offset];
+  $('today-title').textContent = rel || wd.charAt(0).toUpperCase() + wd.slice(1);
+  $('today-date').textContent = rel ? wd.charAt(0).toUpperCase() + wd.slice(1) + ', ' + dm : dm;
   $('daytype').textContent = dt === 'weekend' ? 'Выходной' : 'Рабочий день';
   $('daytype').className = 'chip' + (dt === 'weekend' ? ' weekend' : '');
   $('to-today').hidden = today;
-  document.querySelectorAll('.dt-label').forEach(e => { e.textContent = dt === 'weekend' ? 'в выходные' : 'в рабочие дни'; });
-  $('wake').textContent = state.times[dt].wake; $('sleep').textContent = state.times[dt].sleep;
-  const dd = new Date(day + 'T12:00').toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
-  $('today-title').textContent = today ? 'Сегодня, ' + dd : dd.charAt(0).toUpperCase() + dd.slice(1);
 
+  // сводка: кольцо — доля свободного времени в дне
+  const tm = state.times[dt];
+  $('wake').textContent = tm.wake; $('sleep').textContent = tm.sleep;
+  const span = Math.max(1, ((+tm.sleep.slice(0, 2)) * 60 + (+tm.sleep.slice(3))) - ((+tm.wake.slice(0, 2)) * 60 + (+tm.wake.slice(3))));
+  const C = 2 * Math.PI * 27, frac = Math.min(1, free / span);
+  $('ring-arc').setAttribute('stroke-dasharray', (C * frac).toFixed(1) + ' ' + C.toFixed(1));
   $('st-free').textContent = human(free);
-  $('st-count').textContent = items.filter(i => i.type === 'task' || i.type === 'fixed').length;
-  $('st-count').nextElementSibling.textContent = today ? 'дел на сегодня' : 'дел в этот день';
-  $('st-par').textContent = items.filter(i => i.type === 'bg').length;
+  const count = items.filter(i => i.type === 'task' || i.type === 'fixed').length;
+  const bgN = items.filter(i => i.type === 'bg').length;
+  const doneN = today ? items.filter(i => i.type === 'task' && state.done.ids[keyOf(i)] !== undefined).length : 0;
+  $('st-sub').textContent = (doneN ? doneN + ' из ' : '') + count + ' ' + plural(count, 'дело', 'дела', 'дел') + (bgN ? ' · ' + bgN + ' ' + plural(bgN, 'идёт', 'идут', 'идут') + ' сами' : '');
 
-  let warn = unplaced.length ? '<div class="unplaced"><b>Не поместилось:</b> ' + unplaced.map(t => esc(t.name)).join(', ') + '. Попробуйте раньше встать или перенести что-то.</div>' : '';
+  let warn = unplaced.length ? '<div class="alert"><b>Не поместилось:</b> ' + unplaced.map(t => esc(t.name)).join(', ') + '. Попробуйте раньше встать или перенести что-то.</div>' : '';
   const mm = moved.filter(t => t.when === 'morning');
-  if (mm.length) warn += '<div class="unplaced"><b>Утром не хватает времени:</b> ' + mm.map(t => esc(t.name.toLowerCase())).join(', ') + ' (' + human(mm.reduce((a, t) => a + t.dur, 0)) + '). Поставьте подъём раньше, и план сам перенесёт их на утро.</div>';
+  if (mm.length) warn += '<div class="alert"><b>Утром не хватает времени:</b> ' + mm.map(t => esc(t.name.toLowerCase())).join(', ') + ' (' + human(mm.reduce((a, t) => a + t.dur, 0)) + '). Поставьте подъём раньше, и план сам перенесёт их на утро.</div>';
   $('unplaced').innerHTML = warn;
 
   // карточки «Вы сделали…?» внутри приложения
-  const pending = today ? pendingChecks({ items }, state, nowMin()) : [];
+  const pending = today ? pendingChecks({ items }, state, now) : [];
   $('checks').innerHTML = pending.slice(0, 2).map(it => '<div class="notif" role="alert"><div class="head"><span>Без отметки</span><span>по плану ' + fmt(it.s) + '–' + fmt(it.e) + '</span></div><div class="q">Вы сделали «' + esc(it.name) + '»?</div><div class="acts"><button class="yes" data-yes="' + keyOf(it) + '">✓ Сделано</button><button class="no" data-no="' + keyOf(it) + '">✗ Не сделал</button></div></div>').join('')
     + (pending.length > 2 ? '<div class="note">И ещё ' + (pending.length - 2) + ' без отметки</div>' : '');
 
-  $('timeline').innerHTML = items.map(it => {
+  // линия времени: фоновая работа показывается плашкой у «Запустить», а не отдельной строкой
+  const bgOf = {};
+  items.filter(i => i.type === 'bg').forEach(b => { bgOf[b.s] = b; });
+  const rows = items.filter(i => i.type !== 'bg');
+  // «сейчас» — дело, которое идёт в эту минуту; если такого нет, ближайшее следующее не отмечаем
+  const nowIt = today ? rows.find(i => (i.type === 'task' || i.type === 'fixed') && i.s <= now && now < i.e) : null;
+  $('timeline').innerHTML = rows.map(it => {
     const key = it.task ? keyOf(it) : '';
     const done = today && key && state.done.ids[key] !== undefined;
     const skipped = today && key && state.skip[key];
-    const btn = (it.type === 'task' && today) ? '<button class="check" data-key="' + key + '" aria-pressed="' + done + '" aria-label="Готово: ' + esc(it.name) + '">' + CHECK + '</button>' : '<span></span>';
-    return '<div class="item ' + it.type + (done ? ' done' : '') + (skipped ? ' skipped' : '') + '"><div class="t">' + fmt(it.s) + '<small>' + fmt(it.e) + '</small></div><div class="body"><div class="name">' + esc(it.name) + (it.par ? '<span class="tag par">параллельно</span>' : '') + (skipped ? '<span class="st">не сделано</span>' : '') + '</div><div class="why">' + esc(it.why) + '</div></div>' + btn + '</div>';
+    const isNow = it === nowIt && !done;
+    const bg = it.par ? bgOf[it.e] : null;
+    const cls = ['tl-row', it.type === 'fixed' ? 'fixed' : it.type === 'free' ? 'free' : 'task', it.par ? 'bgstart' : '', done ? 'done' : '', skipped ? 'skipped' : '', isNow ? 'now' : ''].join(' ');
+    let sub = '';
+    if (it.type === 'free') sub = human(it.e - it.s) + ' для себя';
+    else if (isNow) sub = '';
+    else if (it.type === 'fixed') sub = fmt(it.s) + '–' + fmt(it.e);
+    else sub = human(it.e - it.s) + (it.why && !it.par ? ' · ' + it.why.split(' · ')[0].toLowerCase() : '');
+    const btn = (it.type === 'task' && today) ? '<button class="check" data-key="' + key + '" aria-pressed="' + !!done + '" aria-label="Готово: ' + esc(it.name) + '">' + CHECK + '</button>' : '';
+    return '<div class="' + cls + '"><span class="tl-time">' + fmt(it.s) + '</span><span class="tl-rail"><i class="dot"></i></span><div class="tl-body"><div class="tl-text">'
+      + (isNow ? '<span class="now-lbl">СЕЙЧАС · ДО ' + fmt(it.e) + '</span>' : '')
+      + '<span class="tl-name">' + esc(it.type === 'free' ? 'Свободное время' : it.name) + '</span>'
+      + (sub ? '<span class="tl-sub">' + esc(sub) + '</span>' : '')
+      + (bg ? '<span class="par">' + esc(it.task.name) + ' идёт сама до ' + fmt(bg.e) + ' · можно другое</span>' : '')
+      + (skipped ? '<span class="st">Не сделано</span>' : '')
+      + '</div>' + btn + '</div></div>';
   }).join('');
 
-  if (today) notify.schedule(items, state, nowMin());
+  if (today) notify.schedule(items, state, now);
 }
+const plural = (n, one, few, many) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many; };
 
 const DOW_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 const daysText = d => d === 'weekday' ? 'рабочие дни' : d === 'weekend' ? 'выходные' : (d && d.startsWith('dow:')) ? 'по ' + d.slice(4).split(',').map(n => DOW_SHORT[+n]).join(', ') : 'каждый день';
@@ -78,7 +111,7 @@ function describe(t, all = state.tasks) {
   if (t.kind === 'once') meta += ' · ' + dateText(t.date);
   else if (t.kind === 'daily' || (t.days && t.days !== 'all')) meta += ' · ' + daysText(t.days);
   if (t.bg) meta += ' · фоном ' + human(t.bg);
-  if (t.prio === 3) meta += ' · важно';
+  if (t.prio === 3 && !t.fixed && !t.after) meta += ' · важно';
   if (t.kind === 'variable') {
     const left = t.every - daysBetween(t.last, todayISO());
     meta += ' · раз в ' + t.every + ' дн. · ' + (left <= 0 ? '<span class="due">пора</span>' : 'через ' + left + ' дн.');
@@ -89,7 +122,7 @@ function describe(t, all = state.tasks) {
 function renderTasks() {
   const row = t => {
     const meta = describe(t);
-    return '<div class="trow"><div><div style="font-weight:600">' + esc(t.name) + '</div><div class="meta">' + meta + '</div></div><button data-edit="' + t.id + '">Изменить</button></div>';
+    return '<div class="trow"><div><div class="tname">' + esc(t.name) + '</div><div class="meta">' + meta + '</div></div><button data-edit="' + t.id + '">Изменить</button></div>';
   };
   $('list-daily').innerHTML = state.tasks.filter(t => t.kind === 'daily').map(row).join('') || '<div class="note">Пока нет задач</div>';
   $('list-var').innerHTML = state.tasks.filter(t => t.kind === 'variable').map(row).join('') || '<div class="note">Пока нет задач</div>';
@@ -136,6 +169,7 @@ $('notify-btn').onclick = async () => { await notify.requestPermission(); render
 const tabs = { plan: 'view-plan', tasks: 'view-tasks', idea: 'view-idea' };
 function show(name) {
   Object.entries(tabs).forEach(([k, v]) => { $(v).hidden = k !== name; $('tab-' + k).setAttribute('aria-selected', k === name); });
+  $('dict-btn-plan').hidden = name === 'idea';
   window.scrollTo(0, 0);
 }
 Object.keys(tabs).forEach(k => $('tab-' + k).addEventListener('click', () => show(k)));
@@ -163,8 +197,8 @@ function openTime(k) {
   $('time-sheet').hidden = false;
   sheetWheel.set(v);
 }
-$('wake').onclick = () => openTime('wake');
-$('sleep').onclick = () => openTime('sleep');
+$('wake-btn').onclick = () => openTime('wake');
+$('sleep-btn').onclick = () => openTime('sleep');
 $('time-ok').onclick = () => { state.times[typeOfDay(state, viewISO())][timeField] = sheetWheel.get(); $('time-sheet').hidden = true; render(); };
 $('time-cancel').onclick = () => { $('time-sheet').hidden = true; };
 $('time-sheet').addEventListener('click', e => { if (e.target.id === 'time-sheet') $('time-sheet').hidden = true; });
@@ -290,6 +324,7 @@ $('install-later').onclick = () => { $('install-card').hidden = true; };
 
 // ---------- надиктовать задачи ----------
 let draft = [];
+const MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg>';
 const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, listening = false;
 function openDictation() {
@@ -301,7 +336,7 @@ function openDictation() {
   $('dict-sheet').hidden = false;
   if (!Speech) $('dict-text').focus();
 }
-function stopMic() { listening = false; $('dict-mic').classList.remove('on'); $('dict-mic').textContent = '🎙 Говорить'; if (rec) try { rec.stop(); } catch (e) { /* уже остановлен */ } }
+function stopMic() { listening = false; $('dict-mic').classList.remove('on'); $('dict-mic').innerHTML = MIC + '<span>Говорить</span>'; if (rec) try { rec.stop(); } catch (e) { /* уже остановлен */ } }
 $('dict-mic').onclick = () => {
   if (listening) { stopMic(); return; }
   rec = new Speech(); rec.lang = 'ru-RU'; rec.interimResults = true; rec.continuous = true;
@@ -309,7 +344,7 @@ $('dict-mic').onclick = () => {
   rec.onresult = e => { let txt = ''; for (const r of e.results) txt += r[0].transcript; $('dict-text').value = base + txt; };
   rec.onend = () => { if (listening) stopMic(); parseNow(); };
   rec.onerror = () => stopMic();
-  try { rec.start(); listening = true; $('dict-mic').classList.add('on'); $('dict-mic').textContent = '■ Остановить'; } catch (e) { stopMic(); }
+  try { rec.start(); listening = true; $('dict-mic').classList.add('on'); $('dict-mic').innerHTML = '<span>■ Остановить</span>'; } catch (e) { stopMic(); }
 };
 function parseNow() {
   draft = parseDictation($('dict-text').value, todayISO(), state.tasks, newId);
@@ -317,7 +352,7 @@ function parseNow() {
 }
 function renderDraft() {
   const kindName = { daily: 'Повседневная', variable: 'Вариативная', once: 'Разовая' };
-  $('dict-preview').innerHTML = draft.map((t, i) => '<div class="trow"><div><div style="font-weight:600">' + esc(t.name) + ' <span class="tag par" style="color:var(--accent);background:var(--accent-soft)">' + kindName[t.kind] + '</span></div><div class="meta">' + describe(t, state.tasks.concat(draft)) + '</div></div><button type="button" class="ghost" data-drop="' + i + '" aria-label="Убрать">✕</button></div>').join('');
+  $('dict-preview').innerHTML = draft.map((t, i) => '<div class="trow"><div><div class="tname">' + esc(t.name) + '<span class="kind">' + kindName[t.kind] + '</span></div><div class="meta">' + describe(t, state.tasks.concat(draft)) + '</div></div><button type="button" class="ghost" data-drop="' + i + '" aria-label="Убрать">✕</button></div>').join('');
   $('dict-add').hidden = !draft.length;
   $('dict-add').textContent = 'Добавить ' + draft.length + ' ' + (draft.length === 1 ? 'задачу' : draft.length < 5 ? 'задачи' : 'задач');
   $('dict-empty').hidden = !!draft.length || !$('dict-text').value.trim();
@@ -327,7 +362,6 @@ $('dict-text').addEventListener('input', () => { clearTimeout(parseTimer); parse
 $('dict-preview').addEventListener('click', e => { const b = e.target.closest('[data-drop]'); if (b) { draft.splice(+b.dataset.drop, 1); renderDraft(); } });
 $('dict-add').onclick = () => { state.tasks.push(...draft); draft = []; stopMic(); $('dict-sheet').hidden = true; render(); };
 $('dict-close').onclick = () => { stopMic(); $('dict-sheet').hidden = true; };
-$('dict-btn').onclick = openDictation;
 $('dict-btn-plan').onclick = openDictation;
 
 // ---------- запуск ----------

@@ -1,5 +1,5 @@
 // Service worker: работа без интернета и ответы на уведомления.
-const VERSION = 'v7';
+const VERSION = 'v8';
 const CACHE = 'time-manager-' + VERSION;
 const SHELL = [
   './', './index.html', './css/app.css', './manifest.webmanifest',
