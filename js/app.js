@@ -509,11 +509,13 @@ function rowActs(t, today) {
   let h = '';
   if (t.sh) h += t.who === account.myId() ? b('share', 'Отдать в общие') : b('mine', 'Беру на себя', 'take');
   if (today || t.kind === 'once') h += b('tomorrow', 'На завтра');
+  h += b('edit', 'Изменить');
   h += b('del', 'Удалить', 'danger');
   return '<span class="row-acts">' + h + '</span>';
 }
 function rowAction(act, tid) {
   const t = state.tasks.find(x => x.id === tid); if (!t) return;
+  if (act === 'edit') { openRow = null; openForm(t); return; }
   if (act === 'mine') undoable('«' + t.name + '» теперь ваше дело', () => { t.who = account.myId(); });
   if (act === 'share') undoable('«' + t.name + '» снова общее: сделает любой из вас', () => { t.who = 'any'; });
   if (act === 'del') undoable('«' + t.name + '» удалено', () => deleteTask(t));
@@ -652,3 +654,5 @@ render();
 // раз в минуту обновляем план: карточки «Вы сделали?» и смена дня
 setInterval(render, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { notify.drainInbox(); render(); } });
+// номер версии в «Профиле»: по нему видно, обновилось ли приложение на телефоне
+caches.keys().then(k => { const v = k.find(x => x.startsWith('time-manager-')); if (v) $('app-version').textContent = 'Версия приложения: ' + v.replace('time-manager-v', ''); }).catch(() => {});
