@@ -139,9 +139,15 @@ export function buildDay(state, dayISO, todayISO) {
   return { items, unplaced, moved, free };
 }
 
+/**
+ * О каком пункте плана спрашивать «Вы сделали?»: гибкие дела и короткие дела с точным временем
+ * (еда, дорога). Про длинные вроде работы не спрашиваем.
+ */
+export const askable = it => it.type === 'task' || (it.type === 'fixed' && it.e - it.s <= 120);
+
 /** Пункты сегодняшнего плана, время которых прошло, а отметки нет. */
 export function pendingChecks(plan, state, nowMin) {
-  return plan.items.filter(it => it.type === 'task' && it.e <= nowMin
+  return plan.items.filter(it => askable(it) && it.e <= nowMin
     && state.done.ids[keyOf(it)] === undefined && !state.skip[keyOf(it)]);
 }
 

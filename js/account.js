@@ -2,7 +2,7 @@
 // Связывает приложение (app.js) с сервером (sync.js) и слиянием данных (merge.js).
 import * as api from './sync.js';
 import { split, stamp, merge, prune, apply, stable } from './merge.js';
-import { localISO, addDays, fmt, keyOf, buildDay, typeOfDay, toMin, human } from './scheduler.js';
+import { localISO, addDays, fmt, keyOf, buildDay, typeOfDay, toMin, human, askable } from './scheduler.js';
 import * as notify from './notify.js';
 
 const $ = s => document.getElementById(s);
@@ -121,7 +121,7 @@ async function uploadReminders(st) {
       const m = morning(st, plan, day);
       if (m && m.due.getTime() > Date.now()) items.push({ key: 'info:morning', day, due_at: m.due.toISOString(), title: m.title, body: m.body });
     }
-    plan.items.filter(i => i.type === 'task' && i.e < 1440).forEach(i => {
+    plan.items.filter(i => askable(i) && i.e < 1440).forEach(i => {
       const key = keyOf(i);
       if (d === 0 && (st.done.ids[key] !== undefined || st.skip[key])) return;
       const due = new Date(day + 'T' + fmt(i.e) + ':30');

@@ -86,7 +86,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .st{align-self:flex-start;margin-top:4px;font-size:12px;font-weight:600;color:var(--danger);background:var(--danger-soft);border-radius:8px;padding:3px 8px}
 
 .tl-row.fixed .dot{background:var(--dot-fixed)}
-.tl-row.fixed .tl-name{color:var(--muted)}
+.tl-row.fixed.long .tl-name{color:var(--muted)}
 .tl-row.bgstart .dot{background:var(--bgtask-dot)}
 .tl-row.free .dot{background:var(--free)}
 .tl-row.free .tl-body{margin:4px 0 10px;border:1.5px dashed var(--free-line);background:var(--free-soft);border-radius:16px;padding:10px 14px}
@@ -210,7 +210,8 @@ button.ghost.danger{color:var(--danger);align-self:flex-start}
 .meta .who{color:var(--accent);font-weight:600}
 
 /* две кнопки под задачей по нажатию */
-.row-acts{display:flex;gap:6px;margin-top:6px}
+.row-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.row-acts button.take{color:var(--accent);background:var(--accent-soft)}
 .row-acts button{min-height:32px;padding:4px 12px;font-size:13px;border-radius:10px;border:none;background:var(--surface-2);color:var(--ink)}
 .row-acts button.danger{color:var(--danger);background:var(--danger-soft)}
 .tl-row[data-tid] .tl-text{cursor:pointer}

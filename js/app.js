@@ -1,4 +1,4 @@
-import { localISO, addDays, daysBetween, typeOfDay, DEFAULT_WORK_WEEK, fmt, human, WHEN_TXT, keyOf, buildDay, pendingChecks, setDone, setSkipped, ideaFor } from './scheduler.js';
+import { localISO, addDays, daysBetween, typeOfDay, DEFAULT_WORK_WEEK, fmt, human, WHEN_TXT, keyOf, buildDay, pendingChecks, setDone, setSkipped, ideaFor, askable } from './scheduler.js';
 import { sampleTasks, newId } from './sample.js';
 import * as notify from './notify.js';
 import { createWheel } from './wheel.js';
@@ -87,7 +87,11 @@ function renderPlan() {
   items.filter(i => i.type === 'bg').forEach(b => { bgOf[b.s] = b; });
   const rows = items.filter(i => i.type !== 'bg');
   // «сейчас» — дело, которое идёт в эту минуту; если такого нет, ближайшее следующее не отмечаем
-  const nowIt = today ? rows.find(i => (i.type === 'task' || i.type === 'fixed') && i.s <= now && now < i.e) : null;
+  // «сейчас» — самое конкретное из идущих дел: еда в обед важнее работы, внутри которой она идёт
+  const nowIt = today ? rows.filter(i => (i.type === 'task' || i.type === 'fixed') && i.s <= now && now < i.e && !(state.done.ids[keyOf(i)] !== undefined))
+    .sort((a, b) => b.s - a.s || (a.e - a.s) - (b.e - b.s))[0] || null : null;
+  // дело внутри другого (обед во время работы) подписываем, чтобы было понятно, почему они пересекаются
+  const inside = it => rows.find(o => o !== it && o.task && (o.type === 'fixed' || o.type === 'task') && o.s <= it.s && o.e >= it.e && o.e - o.s > it.e - it.s);
   usedIdeas = new Set();
   $('timeline').innerHTML = rows.map(it => {
     const key = it.task ? keyOf(it) : '';
@@ -95,13 +99,13 @@ function renderPlan() {
     const skipped = today && key && state.skip[key];
     const isNow = it === nowIt && !done;
     const bg = it.par ? bgOf[it.e] : null;
-    const cls = ['tl-row', it.type === 'fixed' ? 'fixed' : it.type === 'free' ? 'free' : 'task', it.par ? 'bgstart' : '', done ? 'done' : '', skipped ? 'skipped' : '', isNow ? 'now' : ''].join(' ');
+    const cls = ['tl-row', it.type === 'fixed' ? 'fixed' + (it.e - it.s > 120 ? ' long' : '') : it.type === 'free' ? 'free' : 'task', it.par ? 'bgstart' : '', done ? 'done' : '', skipped ? 'skipped' : '', isNow ? 'now' : ''].join(' ');
     let sub = '';
     if (it.type === 'free') sub = human(it.e - it.s) + ' для себя';
     else if (isNow) sub = '';
-    else if (it.type === 'fixed') sub = fmt(it.s) + '–' + fmt(it.e);
+    else if (it.type === 'fixed') { const c = inside(it); sub = fmt(it.s) + '–' + fmt(it.e) + (c ? ' · во время «' + c.name.toLowerCase() + '»' : ''); }
     else sub = human(it.e - it.s) + (it.why && !it.par ? ' · ' + it.why.split(' · ')[0].toLowerCase() : '');
-    const btn = (it.type === 'task' && today) ? '<button class="check" data-key="' + key + '" aria-pressed="' + !!done + '" aria-label="Готово: ' + esc(it.name) + '">' + CHECK + '</button>' : '';
+    const btn = ((it.type === 'task' || it.type === 'fixed') && today) ? '<button class="check" data-key="' + key + '" aria-pressed="' + !!done + '" aria-label="Готово: ' + esc(it.name) + '">' + CHECK + '</button>' : '';
     const tid = it.task && it.type !== 'free' ? ' data-tid="' + it.task.id + '" data-key="' + key + '"' : '';
     return '<div class="' + cls + '"' + tid + '><span class="tl-time">' + fmt(it.s) + '</span><span class="tl-rail"><i class="dot"></i></span><div class="tl-body"><div class="tl-text">'
       + (isNow ? '<span class="now-lbl">СЕЙЧАС · ДО ' + fmt(it.e) + '</span>' : '')
@@ -109,7 +113,7 @@ function renderPlan() {
       + (sub ? '<span class="tl-sub">' + esc(sub) + '</span>' : '')
       + (bg ? '<span class="par">' + esc(it.task.name) + ' идёт сама до ' + fmt(bg.e) + ' · можно другое</span>' : '')
       + (skipped ? '<span class="st">Не сделано</span>' : '')
-      + (it.task && it.type !== 'free' && openRow === it.task.id && (today || it.task.kind === 'once') ? '<span class="row-acts"><button type="button" data-act="tomorrow" data-tid="' + it.task.id + '">На завтра</button><button type="button" class="danger" data-act="del" data-tid="' + it.task.id + '">Удалить</button></span>' : '')
+      + (it.task && it.type !== 'free' && openRow === it.task.id ? rowActs(it.task, today) : '')
       + (it.type === 'free' ? ideaHtml(it, day) : '')
       + '</div>' + btn + '</div></div>';
   }).join('');
@@ -368,7 +372,7 @@ $('del-btn').onclick = () => {
 function recordDay(items) {
   const me = account.myId();
   let d = 0, t = 0, sh = 0;
-  items.filter(i => i.type === 'task').forEach(i => {
+  items.filter(askable).forEach(i => {
     const key = keyOf(i), done = state.done.ids[key] !== undefined, by = state.by[key];
     if (done && by && by !== me) return; // общее дело сделал партнёр — не моё
     t++;
@@ -447,8 +451,19 @@ function undoable(msg, fn) {
   fn(); openRow = null; render();
   toast(msg, () => { const s = JSON.parse(snap); state.tasks = s.tasks; state.hide = s.hide; render(); });
 }
+/** Кнопки под задачей: перенести, взять на себя (общее дело), удалить. */
+function rowActs(t, today) {
+  const b = (act, label, cls = '') => '<button type="button"' + (cls ? ' class="' + cls + '"' : '') + ' data-act="' + act + '" data-tid="' + t.id + '">' + label + '</button>';
+  let h = '';
+  if (t.sh) h += t.who === account.myId() ? b('share', 'Отдать в общие') : b('mine', 'Беру на себя', 'take');
+  if (today || t.kind === 'once') h += b('tomorrow', 'На завтра');
+  h += b('del', 'Удалить', 'danger');
+  return '<span class="row-acts">' + h + '</span>';
+}
 function rowAction(act, tid) {
   const t = state.tasks.find(x => x.id === tid); if (!t) return;
+  if (act === 'mine') undoable('«' + t.name + '» теперь ваше дело', () => { t.who = account.myId(); });
+  if (act === 'share') undoable('«' + t.name + '» снова общее: сделает любой из вас', () => { t.who = 'any'; });
   if (act === 'del') undoable('«' + t.name + '» удалено', () => deleteTask(t));
   if (act === 'tomorrow') undoable('«' + t.name + '» перенесено на завтра', () => {
     if (t.kind === 'once') t.date = addDays(t.date, 1); else state.hide[t.id] = true;

@@ -1,7 +1,7 @@
 // Уведомления «Вы сделали…?» с кнопками ✓ и ✗.
 // Android: кнопки прямо в уведомлении. iPhone: веб-уведомления без кнопок, нажатие открывает приложение.
 // Без аккаунта уведомления приходят, только если приложение недавно открывали. С аккаунтом их присылает сервер.
-import { keyOf, fmt, localISO } from './scheduler.js';
+import { keyOf, fmt, localISO, askable } from './scheduler.js';
 import { inboxTake } from './inbox.js';
 
 let reg = null;
@@ -71,7 +71,7 @@ export function schedule(items, state, nowMin) {
   timers.forEach(clearTimeout); timers = [];
   if (status() !== 'granted' || serverPush) return;
   const pending = it => state.done.ids[keyOf(it)] === undefined && !state.skip[keyOf(it)];
-  items.filter(it => it.type === 'task').forEach(it => {
+  items.filter(askable).forEach(it => {
     const key = keyOf(it);
     if (state.notified[key] || !pending(it)) return;
     if (it.e <= nowMin) {
