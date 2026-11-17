@@ -55,9 +55,11 @@ export function isDue(t, dayISO, todayISO, doneToday = {}, dayType = dayTypeOf(d
 /**
  * Строит план дня.
  * state: { tasks, times: {weekday:{wake,sleep}, weekend:{wake,sleep}}, done:{ids} }
+ * nowMin (только для сегодня) — текущее время: что уже началось, остаётся на месте
+ * (state.pin хранит, где оно стояло), а остальное раскладывается заново от текущего момента.
  * Возвращает { items, unplaced, moved, free }.
  */
-export function buildDay(state, dayISO, todayISO) {
+export function buildDay(state, dayISO, todayISO, nowMin = null) {
   const tasks = state.tasks;
   const doneToday = (state.done && state.done.ids) || {};
   const dayType = typeOfDay(state, dayISO);
@@ -87,12 +89,26 @@ export function buildDay(state, dayISO, todayISO) {
   });
 
   // 2. Гибкие задачи: важные первыми, из равных первыми фоновые, затем самые просроченные
+  const live = dayISO === todayISO && nowMin !== null;
+  const from = live ? Math.ceil(nowMin / 5) * 5 : wake; // раньше текущего времени новое не ставим
+  const pins = (live && state.pin) || {};
+  const skip = state.skip || {};
+  const settled = t => doneToday[t.id] !== undefined || skip[t.id];
   const flex = tasks.filter(t => !anchored(t) && due(t))
     .map(t => ({ t, over: t.kind === 'variable' ? daysBetween(t.last, dayISO) - t.every : 0 }));
-  flex.sort((a, b) => (b.t.prio - a.t.prio) || ((b.t.bg > 0) - (a.t.bg > 0)) || (b.over - a.over));
+  // из равных по важности первыми разовые: их нельзя сделать в другой день, остальные подождут
+  flex.sort((a, b) => (b.t.prio - a.t.prio) || ((b.t.kind === 'once') - (a.t.kind === 'once')) || ((b.t.bg > 0) - (a.t.bg > 0)) || (b.over - a.over));
+  // сначала то, что уже началось (стоит на своём месте), потом отмеченное, потом остальное от текущего времени
+  const rank = ({ t }) => (live && pins[t.id] !== undefined ? 0 : live && settled(t) ? 1 : 2);
+  flex.sort((a, b) => rank(a) - rank(b));
   flex.forEach(({ t, over }) => {
     const w = WIN[t.when] || WIN.any;
-    const lo = Math.max(wake, w[0] ?? wake), hi = Math.min(sleep, w[1] ?? sleep);
+    const r0 = rank({ t });
+    // окно дела уже прошло (завтрак в 16:00): оставляем его в своём окне, чтобы спросить «Вы сделали?»
+    const pastWin = live && w[1] !== null && w[1] <= from;
+    const start = live && r0 === 2 && !pastWin ? from : wake;
+    let lo = Math.max(start, w[0] ?? wake), hi = Math.min(sleep, w[1] ?? sleep);
+    if (r0 === 0) { lo = pins[t.id]; hi = Math.max(hi, lo + t.dur); }
     const tryRange = (a, b) => {
       for (let s = a; s + t.dur <= b; s += 5) {
         if (clash(s, s + t.dur)) continue;
@@ -110,8 +126,8 @@ export function buildDay(state, dayISO, todayISO) {
       return null;
     };
     let fallback = false;
-    let r = tryRange(lo, hi);
-    if (!r && (lo !== wake || hi !== sleep)) { r = tryRange(wake, sleep); fallback = !!r; if (r) moved.push(t); }
+    let r = r0 === 0 ? tryRange(lo, lo + t.dur) : tryRange(lo, hi);
+    if (!r && (lo !== start || hi !== sleep)) { r = tryRange(start, sleep); fallback = !!r; if (r && r0 !== 0 && !pastWin) moved.push(t); }
     if (!r) { unplaced.push(t); return; }
     const why = [];
     if (t.kind === 'variable') why.push(over > 0 ? 'Просрочено на ' + over + ' дн.' : 'Подошёл срок: раз в ' + t.every + ' дн.');
@@ -131,7 +147,8 @@ export function buildDay(state, dayISO, todayISO) {
 
   // 3. Свободные окна от 15 минут
   const sorted = busy.filter(b => b[1] > wake && b[0] < sleep).sort((a, b) => a[0] - b[0]);
-  let cur = wake, free = 0;
+  // свободное время сегодня считаем от текущего момента: прошедшее уже не вернуть
+  let cur = live ? Math.max(wake, from) : wake, free = 0;
   const gap = (a, b) => { items.push({ s: a, e: b, type: 'free', name: 'Свободное время', why: human(b - a) + ' для себя' }); free += b - a; };
   sorted.forEach(b => { if (b[0] - cur >= 15) gap(cur, b[0]); cur = Math.max(cur, b[1]); });
   if (sleep - cur >= 15) gap(cur, sleep);

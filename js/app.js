@@ -23,7 +23,8 @@ function save(fromSync = false) {
 }
 let state = load() || freshState();
 function rollDay() {
-  if (state.done.date !== todayISO()) { state.done = { date: todayISO(), ids: {} }; state.skip = {}; state.notified = {}; state.hide = {}; state.by = {}; }
+  if (state.done.date !== todayISO()) { state.done = { date: todayISO(), ids: {} }; state.skip = {}; state.notified = {}; state.hide = {}; state.by = {}; state.pin = {}; }
+  if (!state.pin) state.pin = {};
   if (!state.notified) state.notified = {};
   if (!state.hide) state.hide = {};
   if (!state.by) state.by = {};
@@ -44,8 +45,10 @@ const CHECK = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="
 
 function renderPlan() {
   const day = viewISO(), today = offset === 0, dt = typeOfDay(state, day);
-  const { items, unplaced, free, moved } = buildDay(account.planState(state), day, todayISO());
   const now = today ? nowMin() : -1;
+  const { items, unplaced, free, moved } = buildDay(account.planState(state), day, todayISO(), today ? now : null);
+  // начатые дела закрепляем на их месте, чтобы они не уезжали вперёд вместе со временем
+  if (today) items.forEach(i => { if (i.type === 'task' && !i.sub && i.s <= now && state.pin[i.task.id] === undefined) state.pin[i.task.id] = i.s; });
 
   // шапка: «Сегодня» / «Завтра» / день недели, дата мелко сверху
   const d = new Date(day + 'T12:00');
@@ -70,7 +73,9 @@ function renderPlan() {
   const doneN = today ? items.filter(i => i.type === 'task' && state.done.ids[keyOf(i)] !== undefined).length : 0;
   $('st-sub').textContent = (doneN ? doneN + ' из ' : '') + count + ' ' + plural(count, 'дело', 'дела', 'дел') + (bgN ? ' · ' + bgN + ' ' + plural(bgN, 'идёт', 'идут', 'идут') + ' сами' : '');
 
-  let warn = unplaced.length ? '<div class="alert"><b>Не поместилось:</b> ' + unplaced.map(t => esc(t.name)).join(', ') + '. Попробуйте раньше встать или перенести что-то.</div>' : '';
+  let warn = !unplaced.length ? '' : today
+    ? '<div class="alert"><b>Сегодня уже не помещается:</b> ' + unplaced.map(t => esc(t.name)).join(', ') + '. Освободите время, удалив или перенеся другое дело, и план перестроится сам. <button type="button" class="ghost" id="unplaced-tomorrow">Перенести на завтра</button></div>'
+    : '<div class="alert"><b>Не поместилось:</b> ' + unplaced.map(t => esc(t.name)).join(', ') + '. Попробуйте раньше встать или перенести что-то.</div>';
   const mm = moved.filter(t => t.when === 'morning');
   if (mm.length) warn += '<div class="alert"><b>Утром не хватает времени:</b> ' + mm.map(t => esc(t.name.toLowerCase())).join(', ') + ' (' + human(mm.reduce((a, t) => a + t.dur, 0)) + '). Поставьте подъём раньше, и план сам перенесёт их на утро.</div>';
   const hid = today ? state.tasks.filter(t => state.hide[t.id]) : [];
@@ -199,7 +204,13 @@ $('checks').addEventListener('click', e => {
   if (y) applyAction(y.dataset.yes, 'done');
   if (n) applyAction(n.dataset.no, 'skip');
 });
-$('unplaced').addEventListener('click', e => { const b = e.target.closest('[data-unhide]'); if (b) { delete state.hide[b.dataset.unhide]; render(); } });
+$('unplaced').addEventListener('click', e => {
+  if (e.target.id === 'unplaced-tomorrow') {
+    const { unplaced } = buildDay(account.planState(state), todayISO(), todayISO(), nowMin());
+    undoable('Перенесено на завтра: ' + unplaced.map(t => t.name).join(', '), () => unplaced.forEach(t => { if (t.kind === 'once') t.date = addDays(t.date, 1); else state.hide[t.id] = true; }));
+    return;
+  }
+  const b = e.target.closest('[data-unhide]'); if (b) { delete state.hide[b.dataset.unhide]; render(); } });
 $('prev-day').onclick = () => { offset--; render(); };
 $('next-day').onclick = () => { offset++; render(); };
 $('to-today').onclick = () => { offset = 0; render(); };

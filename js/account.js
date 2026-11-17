@@ -116,7 +116,7 @@ async function uploadReminders(st) {
   const today = todayISO(), items = [], view = planState(st);
   for (let d = 0; d < 7; d++) {
     const day = addDays(today, d);
-    const plan = buildDay(view, day, today);
+    const now = new Date(), plan = buildDay(view, day, today, d === 0 ? now.getHours() * 60 + now.getMinutes() : null);
     if (!st.prefs || st.prefs.morning !== false) {
       const m = morning(st, plan, day);
       if (m && m.due.getTime() > Date.now()) items.push({ key: 'info:morning', day, due_at: m.due.toISOString(), title: m.title, body: m.body });

@@ -112,3 +112,40 @@ test('убранное на сегодня дело пропадает толь�
   assert.equal(has('2026-11-17'), false);
   assert.equal(has('2026-11-18'), true);
 });
+
+test('сегодня план живой: новое ставится от текущего времени, начатое остаётся на месте', async () => {
+  const { buildDay } = await import('../js/scheduler.js');
+  const T = (id, name, dur, when = 'any', extra = {}) => ({ id, name, kind: 'daily', days: 'all', fixed: '', dur, prio: 2, when, bg: 0, fin: 0, ...extra });
+  const st = { tasks: [T('a', 'Уборка', 60), T('b', 'Завтрак', 20, 'morning'), T('c', 'Чтение', 30)],
+    times: { weekday: { wake: '07:00', sleep: '23:00' }, weekend: { wake: '07:00', sleep: '23:00' } }, done: { ids: {} }, skip: {}, pin: {} };
+  const D = '2026-11-17', now = 16 * 60 + 41;
+  const at = (p, id) => p.items.find(i => i.task && i.task.id === id).s;
+  let p = buildDay(st, D, D, now);
+  assert.equal(at(p, 'a'), 16 * 60 + 45, 'не в прошлом, а с ближайших 5 минут');
+  assert.equal(at(p, 'b'), 7 * 60, 'утреннее дело остаётся утром, чтобы спросить о нём');
+  assert.equal(p.moved.length, 0);
+  assert.equal(p.items.filter(i => i.type === 'free').every(i => i.s >= 16 * 60 + 45), true, 'свободное время только впереди');
+  // уборка началась — закрепили, время идёт дальше, а она не прыгает
+  st.pin = { a: 16 * 60 + 45 };
+  p = buildDay(st, D, D, 17 * 60 + 10);
+  assert.equal(at(p, 'a'), 16 * 60 + 45);
+  // отмеченное сделанным не съедает время впереди
+  st.done.ids = { c: '' };
+  p = buildDay(st, D, D, 17 * 60 + 10);
+  assert.ok(at(p, 'c') < 17 * 60 + 10);
+  // без текущего времени (другие дни) — как раньше, от подъёма
+  assert.equal(at(buildDay(st, '2026-11-18', D), 'a') < 12 * 60, true);
+});
+
+test('удалили дело — освободившееся окно сразу занимает то, что не помещалось', async () => {
+  const { buildDay } = await import('../js/scheduler.js');
+  const T = (id, dur, fixed = '') => ({ id, name: id, kind: 'daily', days: 'all', fixed, dur, prio: 2, when: 'any', bg: 0, fin: 0 });
+  const st = { tasks: [T('big', 300, '17:00'), T('new', 60)],
+    times: { weekday: { wake: '07:00', sleep: '22:00' }, weekend: { wake: '07:00', sleep: '22:00' } }, done: { ids: {} }, skip: {}, pin: {} };
+  const D = '2026-11-17', now = 16 * 60 + 40;
+  assert.equal(buildDay(st, D, D, now).unplaced.length, 1);
+  st.tasks = st.tasks.filter(t => t.id !== 'big');
+  const p = buildDay(st, D, D, now);
+  assert.equal(p.unplaced.length, 0);
+  assert.equal(p.items.find(i => i.task && i.task.id === 'new').s, 16 * 60 + 40);
+});
