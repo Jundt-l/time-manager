@@ -10,24 +10,9 @@
   --shadow:0 1px 2px rgb(20 26 46 / .06), 0 8px 24px rgb(20 26 46 / .05);
   --shadow-now:0 8px 24px rgb(56 70 196 / .14);
   --card-border:transparent;
+  color-scheme:light;
   --f-body:"Onest", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0F131C; --surface:#181E2B; --surface-2:#202839; --ink:#EEF1F7; --muted:#9AA3B6; --faint:#6F788C; --line:#283044;
-  --accent:#8EA2FF; --accent-soft:#232B4A; --accent-ring:#2A3460; --on-accent:#0F131C;
-  --free:#5FD3A0; --free-soft:#14302A; --free-line:#2F6B52; --free-text:#8FDCB9;
-  --bgtask:#F0B45A; --bgtask-dot:#F0B45A; --bgtask-soft:#3A2C12;
-  --rail:#283044; --dot-fixed:#4A5368;
-  --danger:#FF8A80; --danger-soft:#3A1D1D;
-  --shadow:none; --shadow-now:0 8px 24px rgb(0 0 0 / .35); --card-border:#283044; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#0F131C; --surface:#181E2B; --surface-2:#202839; --ink:#EEF1F7; --muted:#9AA3B6; --faint:#6F788C; --line:#283044;
-  --accent:#8EA2FF; --accent-soft:#232B4A; --accent-ring:#2A3460; --on-accent:#0F131C;
-  --free:#5FD3A0; --free-soft:#14302A; --free-line:#2F6B52; --free-text:#8FDCB9;
-  --bgtask:#F0B45A; --bgtask-dot:#F0B45A; --bgtask-soft:#3A2C12;
-  --rail:#283044; --dot-fixed:#4A5368;
-  --danger:#FF8A80; --danger-soft:#3A1D1D;
-  --shadow:none; --shadow-now:0 8px 24px rgb(0 0 0 / .35); --card-border:#283044; color-scheme:dark}
 
 *{box-sizing:border-box}
 [hidden]{display:none!important}
